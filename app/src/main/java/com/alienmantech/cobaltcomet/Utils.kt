@@ -2,6 +2,7 @@ package com.alienmantech.cobaltcomet
 
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.net.Uri
 import android.text.TextUtils
 import android.util.Log
@@ -9,6 +10,13 @@ import android.util.Log
 class Utils {
 
     companion object {
+
+        private const val PREF_FILE_NAME = "PrefFile"
+        const val PREF_PHONE_NUMBER = "phone"
+
+        fun getSavePref(context: Context): SharedPreferences {
+            return context.getSharedPreferences(PREF_FILE_NAME, Context.MODE_PRIVATE);
+        }
 
         fun parseUrl(text: String): String? {
             val index = text.indexOf("http")
