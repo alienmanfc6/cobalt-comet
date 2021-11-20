@@ -81,6 +81,10 @@ class Utils {
             }
         }
 
+        fun isYelpShareLink(data: String): Boolean {
+            return data.contains("://yelp")
+        }
+
         fun logInfo(message: String) {
             Log.i("CobaltComet", message)
         }

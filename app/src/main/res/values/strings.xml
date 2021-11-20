@@ -2,4 +2,9 @@
     <string name="app_name">Cobalt Comet</string>
 
     <string name="phone_number_label">Phone Number</string>
+
+    <!-- Full screen error messages -->
+    <string name="share_error_title">Unable to use this link</string>
+    <string name="share_error_message__yelp">Yelp: Please use View Map -> Menu -> Open In Google Map.</string>
+    <string name="share_error_button_text">Close</string>
 </resources>
