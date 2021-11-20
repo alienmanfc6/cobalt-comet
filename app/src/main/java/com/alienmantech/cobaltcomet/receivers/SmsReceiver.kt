@@ -1,9 +1,11 @@
-package com.alienmantech.cobaltcomet
+package com.alienmantech.cobaltcomet.receivers
 
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.telephony.SmsMessage
+import com.alienmantech.cobaltcomet.utils.CommunicationUtils
+import com.alienmantech.cobaltcomet.utils.Utils
 
 class SmsReceiver : BroadcastReceiver() {
 

@@ -11,7 +11,7 @@
         android:theme="@style/Theme.CobaltComet">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".ui.MainActivity"
             android:exported="true">
 
             <intent-filter>
@@ -22,7 +22,7 @@
         </activity>
 
         <activity
-            android:name=".ShareReceiverActivity"
+            android:name=".ui.ShareReceiverActivity"
             android:exported="true">
 
             <intent-filter>
@@ -61,7 +61,7 @@
         </activity>
 
         <receiver
-            android:name=".SmsReceiver"
+            android:name=".receivers.SmsReceiver"
             android:exported="true">
             <intent-filter android:priority="999">
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />

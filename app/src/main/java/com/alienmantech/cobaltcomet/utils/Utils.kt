@@ -1,4 +1,4 @@
-package com.alienmantech.cobaltcomet
+package com.alienmantech.cobaltcomet.utils
 
 import android.content.Context
 import android.content.Intent

@@ -1,4 +1,4 @@
-package com.alienmantech.cobaltcomet
+package com.alienmantech.cobaltcomet.ui
 
 import android.content.Intent
 import android.os.Bundle
@@ -6,6 +6,9 @@ import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import com.alienmantech.cobaltcomet.R
+import com.alienmantech.cobaltcomet.utils.CommunicationUtils
+import com.alienmantech.cobaltcomet.utils.Utils
 
 class ShareReceiverActivity : AppCompatActivity() {
 
@@ -59,12 +62,12 @@ class ShareReceiverActivity : AppCompatActivity() {
         finish()
     }
 
-    fun sendMessage(message: String) {
+    private fun sendMessage(message: String) {
         val to = Utils.getSavePref(this).getString(Utils.PREF_PHONE_NUMBER, null)
         CommunicationUtils.sendMessage(to, message)
     }
 
-    fun showYelpError() {
+    private fun showYelpError() {
         errorMessageTextView.setText(R.string.share_error_message__yelp)
 
         errorTitleTextView.visibility = View.VISIBLE

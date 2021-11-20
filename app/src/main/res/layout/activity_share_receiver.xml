@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:padding="64dp"
-    tools:context=".ShareReceiverActivity">
+    tools:context=".ui.ShareReceiverActivity">
 
     <Button
         android:id="@+id/share_receiver_error_button"
@@ -22,9 +22,10 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_above="@id/share_receiver_error_button"
-        android:text="@string/share_error_message__yelp"
+        android:layout_centerHorizontal="true"
         android:textSize="14sp"
         android:visibility="gone"
+        tools:text="Error message here"
         tools:visibility="visible" />
 
     <TextView

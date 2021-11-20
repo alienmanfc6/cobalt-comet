@@ -1,8 +1,9 @@
-package com.alienmantech.cobaltcomet
+package com.alienmantech.cobaltcomet.utils
 
 import android.content.Context
 import android.telephony.SmsManager
 import android.text.TextUtils
+import com.alienmantech.cobaltcomet.models.MessageModel
 
 class CommunicationUtils {
 
@@ -10,7 +11,6 @@ class CommunicationUtils {
         const val SMS_PREFIX = "CobaltComet"
 
         fun sendMessage(to: String?, body: String) {
-            // TODO: 11/18/21 future logic to send via different methods
             to?.let {
                 sendSms(it, body)
             }
@@ -35,7 +35,7 @@ class CommunicationUtils {
             }
         }
 
-        fun encodeMessage(text: String): String {
+        fun encodeUrlMessage(text: String): String {
             val message = MessageModel()
 
             if (text.contains("\n")) {

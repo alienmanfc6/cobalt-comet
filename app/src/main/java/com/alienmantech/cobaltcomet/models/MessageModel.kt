@@ -1,4 +1,4 @@
-package com.alienmantech.cobaltcomet
+package com.alienmantech.cobaltcomet.models
 
 import org.json.JSONArray
 import org.json.JSONObject

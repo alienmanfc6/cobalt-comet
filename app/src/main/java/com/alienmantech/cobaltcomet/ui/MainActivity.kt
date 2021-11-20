@@ -1,8 +1,10 @@
-package com.alienmantech.cobaltcomet
+package com.alienmantech.cobaltcomet.ui
 
 import android.os.Bundle
 import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
+import com.alienmantech.cobaltcomet.R
+import com.alienmantech.cobaltcomet.utils.Utils
 
 class MainActivity : AppCompatActivity() {
     private lateinit var phoneNumberEditText: EditText
