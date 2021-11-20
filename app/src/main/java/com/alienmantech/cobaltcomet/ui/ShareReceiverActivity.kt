@@ -40,7 +40,7 @@ class ShareReceiverActivity : AppCompatActivity() {
                     }
 
                     // send encoded data
-                    sendMessage(CommunicationUtils.encodeMessage(clipText))
+                    sendMessage(CommunicationUtils.encodeUrlMessage(clipText))
                     // send just the url
                     Utils.parseUrl(clipText)?.let { url -> sendMessage(url) }
                 }
