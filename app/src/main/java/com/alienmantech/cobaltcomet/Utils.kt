@@ -34,27 +34,21 @@ class Utils {
             }
         }
 
-        fun openInGoogleMaps(context: Context) {
-            val lat = "37.5749"
-            val lng = "-122.4194"
-
+        fun launchGoogleMaps(context: Context, lat: String, lng: String) {
             val gmmIntentUri = Uri.parse("geo:$lat,$lng")
             val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
             mapIntent.setPackage("com.google.android.apps.maps")
-
+            mapIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
             mapIntent.resolveActivity(context.packageManager)?.let {
                 context.startActivity(mapIntent)
             }
         }
 
-        fun openInGoogleMapsAlt(context: Context) {
-            val lat = "37.7749"
-            val lng = "-122.4194"
-
+        fun launchGoogleMapsNavigation(context: Context, lat: String, lng: String) {
             val gmmIntentUri = Uri.parse("google.navigation:q=$lat,$lng")
             val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
             mapIntent.setPackage("com.google.android.apps.maps")
-
+            mapIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
             mapIntent.resolveActivity(context.packageManager)?.let {
                 context.startActivity(mapIntent)
             }

@@ -1,5 +1,6 @@
 package com.alienmantech.cobaltcomet
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
@@ -23,7 +24,44 @@ class ShareReceiverActivity : AppCompatActivity() {
             finish()
         }
 
+        handleIntent()
+    }
+
+    private fun handleIntent() {
+        if (intent.action.equals(Intent.ACTION_SEND)) {
+            if (intent.type.equals("text/plain")) {
+                intent.getStringExtra(Intent.EXTRA_TEXT)?.let { clipText ->
+                    if (Utils.isYelpShareLink(clipText)) {
+                        showYelpError()
+                        return // return so we don't close the activity
+                    }
+
+                    // send encoded data
+                    sendMessage(CommunicationUtils.encodeMessage(clipText))
+                    // send just the url
+                    Utils.parseUrl(clipText)?.let { url -> sendMessage(url) }
+                }
+            }
+        } else if (intent.action.equals(Intent.ACTION_VIEW)) {
+            intent.data?.let { data ->
+                if (data.scheme.equals("geo")) {
+                    val ssp = data.schemeSpecificPart.toString()
+                    val query = data.query.toString()
+                    val values = ssp
+                        .replace(query, "")
+                        .replace("?", "")
+                        .split(",")
+                    sendMessage(CommunicationUtils.encodeGeoMessage(values[0], values[1]))
+                }
+            }
+        }
+
         finish()
+    }
+
+    fun sendMessage(message: String) {
+        val to = Utils.getSavePref(this).getString(Utils.PREF_PHONE_NUMBER, null)
+        CommunicationUtils.sendMessage(to, message)
     }
 
     fun showYelpError() {

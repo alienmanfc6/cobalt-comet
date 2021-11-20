@@ -6,7 +6,9 @@ import org.json.JSONObject
 @Suppress("MemberVisibilityCanBePrivate")
 data class MessageModel(
     var textList: MutableList<String> = mutableListOf(),
-    var url: String = ""
+    var url: String = "",
+    var lat: String = "",
+    var lng: String = ""
 ) {
 
     fun addText(text: String) {
@@ -26,18 +28,30 @@ data class MessageModel(
         }
 
         url = jData.optString("url")
+        lat = jData.optString("lat")
+        lng = jData.optString("lng")
     }
 
     fun toJson(): JSONObject {
         val jData = JSONObject()
 
-        val jTextArray = JSONArray()
-        for (text in textList) {
-            jTextArray.put(text)
+        if (textList.isNotEmpty()) {
+            val jTextArray = JSONArray()
+            for (text in textList) {
+                jTextArray.put(text)
+            }
+            jData.put("text", jTextArray)
         }
-        jData.put("text", jTextArray)
 
-        jData.put("url", url)
+        if (url.isNotEmpty()) {
+            jData.put("url", url)
+        }
+        if (lat.isNotEmpty()) {
+            jData.put("lat", lat)
+        }
+        if (lng.isNotEmpty()) {
+            jData.put("lng", lng)
+        }
         return jData
     }
 

@@ -9,9 +9,11 @@ class CommunicationUtils {
     companion object {
         const val SMS_PREFIX = "CobaltComet"
 
-        fun sendMessage(to: String, body: String) {
+        fun sendMessage(to: String?, body: String) {
             // TODO: 11/18/21 future logic to send via different methods
-            sendSms(to, body)
+            to?.let {
+                sendSms(it, body)
+            }
         }
 
         // decide if this is a message we want to try to process
@@ -24,7 +26,12 @@ class CommunicationUtils {
             Utils.logInfo("handleIncomingMessage: $text")
 
             decodeMessage(text)?.let { message ->
-                Utils.launchWebBrowser(context, message.url)
+                if (message.url.isNotEmpty()) {
+                    Utils.launchWebBrowser(context, message.url)
+                }
+                if (message.lat.isNotEmpty() && message.lng.isNotEmpty()) {
+                    Utils.launchGoogleMapsNavigation(context, message.lat, message.lng)
+                }
             }
         }
 
@@ -50,6 +57,13 @@ class CommunicationUtils {
                 }
             }
 
+            return SMS_PREFIX + message.toString()
+        }
+
+        fun encodeGeoMessage(lat: String, lng: String): String {
+            val message = MessageModel()
+            message.lat = lat
+            message.lng = lng
             return SMS_PREFIX + message.toString()
         }
 
