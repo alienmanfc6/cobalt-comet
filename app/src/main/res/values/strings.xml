@@ -2,6 +2,7 @@
     <string name="app_name">Cobalt Comet</string>
 
     <string name="phone_number_label">Phone Number</string>
+    <string name="phone_number_hint">1112223333</string>
 
     <!-- Full screen error messages -->
     <string name="share_error_title">Unable to use this link</string>
