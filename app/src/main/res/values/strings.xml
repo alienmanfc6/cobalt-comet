@@ -1,6 +1,7 @@
 <resources>
-    <string name="app_name">Cobalt Comet</string>
+    <string name="app_name">Uplink</string>
 
+    <!-- Main Activity -->
     <string name="phone_number_label">Phone Number</string>
     <string name="phone_number_hint">1112223333</string>
 
@@ -9,6 +10,7 @@
     <string name="share_error_message__yelp">Yelp: Please use View Map -> Menu -> Open In Google Map.</string>
     <string name="share_error_button_text">Close</string>
 
+    <!-- Draw on apps permission dialog -->
     <string name="draw_on_apps_dialog_title">Required Permission</string>
     <string name="draw_on_apps_dialog_message">This app requires "Display over other apps" in order to start navigation from the background. Please enable this app on the next screen.</string>
     <string name="draw_on_apps_dialog_positive_button_text">OK</string>
