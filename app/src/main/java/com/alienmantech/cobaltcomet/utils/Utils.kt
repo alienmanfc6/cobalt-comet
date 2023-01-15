@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import android.text.TextUtils
-import android.util.Log
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logError
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logWarn
 
@@ -14,10 +13,22 @@ class Utils {
     companion object {
 
         private const val PREF_FILE_NAME = "PrefFile"
-        const val PREF_PHONE_NUMBER = "phone"
+        private const val PREF_PHONE_NUMBER = "phone"
 
         fun getSavePref(context: Context): SharedPreferences {
             return context.getSharedPreferences(PREF_FILE_NAME, Context.MODE_PRIVATE);
+        }
+
+        fun loadPhoneNumbers(context: Context): List<String>? {
+            return getSavePref(context).getString(PREF_PHONE_NUMBER, null)?.let {
+                csvToList(it)
+            }
+        }
+
+        fun savePhoneNumbers(context: Context, phoneNumber: List<String>) {
+            getSavePref(context).edit()
+                .putString(PREF_PHONE_NUMBER, listToCsv(phoneNumber))
+                .apply()
         }
 
         fun parseUrl(text: String): String? {
@@ -79,6 +90,23 @@ class Utils {
 
         fun isYelpShareLink(data: String): Boolean {
             return data.contains("://yelp")
+        }
+
+        fun csvToList(string: String): List<String> {
+            return if (string.contains(","))
+                string.split(",").toList()
+            else listOf(string)
+        }
+
+        fun listToCsv(list: List<String>): String {
+            val sb = StringBuilder()
+            for (item in list) {
+                if (sb.isNotEmpty()) {
+                    sb.append(",")
+                }
+                sb.append(item)
+            }
+            return sb.toString()
         }
     }
 }

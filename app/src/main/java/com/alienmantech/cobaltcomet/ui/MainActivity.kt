@@ -44,21 +44,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadPhoneNumber() {
-        val pref = Utils.getSavePref(this)
-
-        pref.getString(Utils.PREF_PHONE_NUMBER, null)?.let {
-            phoneNumberEditText.setText(it)
+        Utils.loadPhoneNumbers(this)?.let {
+            phoneNumberEditText.setText(Utils.listToCsv(it))
         }
     }
 
     private fun savePhoneNumber() {
-        val editor = Utils.getSavePref(this).edit()
-
         phoneNumberEditText.text?.toString()?.let {
-            editor.putString(Utils.PREF_PHONE_NUMBER, it)
+            Utils.savePhoneNumbers(this, Utils.csvToList(it))
         }
-
-        editor.apply()
     }
 
     private fun checkPermissions() {
