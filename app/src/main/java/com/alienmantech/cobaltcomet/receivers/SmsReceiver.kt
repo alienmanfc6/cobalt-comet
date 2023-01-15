@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.telephony.SmsMessage
 import com.alienmantech.cobaltcomet.utils.CommunicationUtils
+import com.alienmantech.cobaltcomet.utils.Logger
 import com.alienmantech.cobaltcomet.utils.Utils
 
 class SmsReceiver : BroadcastReceiver() {
@@ -37,7 +38,7 @@ class SmsReceiver : BroadcastReceiver() {
                 CommunicationUtils.handleIncomingMessage(context, from, message)
             }
         } catch (e: Exception) {
-            Utils.logError("Unable to parse message.", e)
+            Logger.logError("Unable to parse message.", e)
         }
     }
 }

@@ -6,6 +6,8 @@ import android.content.SharedPreferences
 import android.net.Uri
 import android.text.TextUtils
 import android.util.Log
+import com.alienmantech.cobaltcomet.utils.Logger.Companion.logError
+import com.alienmantech.cobaltcomet.utils.Logger.Companion.logWarn
 
 class Utils {
 
@@ -77,18 +79,6 @@ class Utils {
 
         fun isYelpShareLink(data: String): Boolean {
             return data.contains("://yelp")
-        }
-
-        fun logInfo(message: String) {
-            Log.i("CobaltComet", message)
-        }
-
-        fun logWarn(message: String) {
-            Log.w("CobaltComet", message)
-        }
-
-        fun logError(message: String, e: Throwable) {
-            Log.e("CobaltComet", message, e)
         }
     }
 }

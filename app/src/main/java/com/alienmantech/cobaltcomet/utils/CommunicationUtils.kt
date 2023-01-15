@@ -23,7 +23,7 @@ class CommunicationUtils {
 
         // handle any incoming message
         fun handleIncomingMessage(context: Context, from: String, text: String) {
-            Utils.logInfo("handleIncomingMessage: $text")
+            Logger.logInfo("handleIncomingMessage: $text")
 
             decodeMessage(text)?.let { message ->
                 if (message.url.isNotEmpty()) {
