@@ -15,6 +15,8 @@ class Utils {
         private const val PREF_FILE_NAME = "PrefFile"
         private const val PREF_PHONE_NUMBER = "phone"
 
+        private const val PHONE_NUMBER_DELIM = "-"
+
         fun getSavePref(context: Context): SharedPreferences {
             return context.getSharedPreferences(PREF_FILE_NAME, Context.MODE_PRIVATE);
         }
@@ -93,8 +95,8 @@ class Utils {
         }
 
         fun csvToList(string: String): List<String> {
-            return if (string.contains(","))
-                string.split(",").toList()
+            return if (string.contains(PHONE_NUMBER_DELIM))
+                string.split(PHONE_NUMBER_DELIM).toList()
             else listOf(string)
         }
 
@@ -102,7 +104,7 @@ class Utils {
             val sb = StringBuilder()
             for (item in list) {
                 if (sb.isNotEmpty()) {
-                    sb.append(",")
+                    sb.append(PHONE_NUMBER_DELIM)
                 }
                 sb.append(item)
             }

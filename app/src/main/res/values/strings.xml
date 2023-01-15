@@ -5,10 +5,18 @@
     <string name="phone_number_label">Phone Number</string>
     <string name="phone_number_hint">1112223333</string>
 
+    <!-- Share Receiver Picker -->
+    <string name="share_receiver_picker_title">Select Contact to Send Link</string>
+
     <!-- Full screen error messages -->
-    <string name="share_error_title">Unable to use this link</string>
-    <string name="share_error_message__yelp">Yelp: Please use View Map -> Menu -> Open In Google Map.</string>
+    <string name="share_error_title__default">Unable to use this link</string>
+    <string name="share_error_message__default">Unknown error occurred.</string>
     <string name="share_error_button_text">Close</string>
+
+    <string name="share_error_title__no_contacts">No Contacts</string>
+    <string name="share_error_message__no_contacts">Please add a contacts phone number from the main menu.</string>
+
+    <string name="share_error_message__yelp">Yelp: Please use View Map -> Menu -> Open In Google Map.</string>
 
     <!-- Draw on apps permission dialog -->
     <string name="draw_on_apps_dialog_title">Required Permission</string>
