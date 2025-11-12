@@ -4,6 +4,7 @@ import android.content.Context
 import android.telephony.SmsManager
 import android.text.TextUtils
 import com.alienmantech.cobaltcomet.models.MessageModel
+import com.alienmantech.cobaltcomet.utils.Logger
 
 class CommunicationUtils {
 
@@ -26,11 +27,24 @@ class CommunicationUtils {
             Logger.logInfo("handleIncomingMessage: $text")
 
             decodeMessage(text)?.let { message ->
-                if (message.url.isNotEmpty()) {
-                    Utils.launchWebBrowser(context, message.url)
-                }
+                var navigationLaunched = false
                 if (message.lat.isNotEmpty() && message.lng.isNotEmpty()) {
-                    Utils.launchGoogleMapsNavigation(context, message.lat, message.lng)
+                    navigationLaunched =
+                        Utils.launchGoogleMapsNavigation(context, message.lat, message.lng)
+                }
+
+                if (message.url.isNotEmpty()) {
+                    val handledByMaps = if (!navigationLaunched) {
+                        Utils.tryLaunchGoogleMapsFromUrl(context, message.url)
+                    } else {
+                        false
+                    }
+
+                    if (!handledByMaps) {
+                        if (!navigationLaunched || !Utils.isGoogleMapsUrl(message.url)) {
+                            Utils.launchWebBrowser(context, message.url)
+                        }
+                    }
                 }
             }
         }

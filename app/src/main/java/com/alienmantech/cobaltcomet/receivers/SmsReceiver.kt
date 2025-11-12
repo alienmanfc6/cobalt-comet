@@ -17,7 +17,7 @@ class SmsReceiver : BroadcastReceiver() {
             val pdus = bundle["pdus"] as Array<*>? ?: return
 
             var from = ""
-            var message = ""
+            val messageBuilder = StringBuilder()
 
             val msgs = arrayOfNulls<SmsMessage>(pdus.size)
             for (i in msgs.indices) {
@@ -29,10 +29,12 @@ class SmsReceiver : BroadcastReceiver() {
                 }
                 msgs[i]?.messageBody?.let {
                     if (it.isNotEmpty()) {
-                        message = it
+                        messageBuilder.append(it)
                     }
                 }
             }
+
+            val message = messageBuilder.toString()
 
             if (CommunicationUtils.shouldInterceptMessage(message)) {
                 CommunicationUtils.handleIncomingMessage(context, from, message)
