@@ -3,7 +3,6 @@ package com.alienmantech.cobaltcomet.utils
 import android.util.Log
 
 class Logger {
-
     companion object {
 
         private const val LOG_TAG = "CobaltComet"
@@ -20,5 +19,4 @@ class Logger {
             Log.e(LOG_TAG, message, e)
         }
     }
-
 }
