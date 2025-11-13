@@ -1,26 +1,3 @@
 <resources>
-    <string name="app_name">Uplink</string>
-
-    <!-- Main Activity -->
-    <string name="phone_number_label">Phone Number</string>
-    <string name="phone_number_hint">1112223333</string>
-
-    <!-- Share Receiver Picker -->
-    <string name="share_receiver_picker_title">Select Contact to Send Link</string>
-
-    <!-- Full screen error messages -->
-    <string name="share_error_title__default">Unable to use this link</string>
-    <string name="share_error_message__default">Unknown error occurred.</string>
-    <string name="share_error_button_text">Close</string>
-
-    <string name="share_error_title__no_contacts">No Contacts</string>
-    <string name="share_error_message__no_contacts">Please add a contacts phone number from the main menu.</string>
-
-    <string name="share_error_message__yelp">Yelp: Please use View Map -> Menu -> Open In Google Map.</string>
-
-    <!-- Draw on apps permission dialog -->
-    <string name="draw_on_apps_dialog_title">Required Permission</string>
-    <string name="draw_on_apps_dialog_message">This app requires "Display over other apps" in order to start navigation from the background. Please enable this app on the next screen.</string>
-    <string name="draw_on_apps_dialog_positive_button_text">OK</string>
-    <string name="draw_on_apps_dialog_negative_button_text">Cancel</string>
+    <string name="app_name">Cobalt Comet</string>
 </resources>
