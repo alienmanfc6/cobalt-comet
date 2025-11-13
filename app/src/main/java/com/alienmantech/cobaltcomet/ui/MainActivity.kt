@@ -5,10 +5,31 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Settings
-import android.widget.EditText
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.Surface
+import androidx.compose.material.Text
+import androidx.compose.material.TextField
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.appcompat.app.AppCompatActivity
 import com.alienmantech.cobaltcomet.R
 import com.alienmantech.cobaltcomet.utils.Utils
 
@@ -20,13 +41,24 @@ class MainActivity : AppCompatActivity() {
         private const val REQUEST_DRAW_PERMISSION = 2
     }
 
-    private lateinit var phoneNumberEditText: EditText
+    private var phoneNumber by mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        phoneNumber = loadPhoneNumber()
 
-        phoneNumberEditText = findViewById(R.id.phone_number_edit_text)
+        setContent {
+            MaterialTheme {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    PhoneNumberScreen(
+                        phoneNumber = phoneNumber,
+                        onPhoneNumberChange = { updatedValue ->
+                            phoneNumber = updatedValue
+                        }
+                    )
+                }
+            }
+        }
 
         checkPermissions()
     }
@@ -34,25 +66,23 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
 
-        loadPhoneNumber()
+        phoneNumber = loadPhoneNumber()
     }
 
     override fun onPause() {
         super.onPause()
 
-        savePhoneNumber()
+        savePhoneNumber(phoneNumber)
     }
 
-    private fun loadPhoneNumber() {
-        Utils.loadPhoneNumbers(this)?.let {
-            phoneNumberEditText.setText(Utils.listToCsv(it))
-        }
+    private fun loadPhoneNumber(): String {
+        return Utils.loadPhoneNumbers(this)?.let {
+            Utils.listToCsv(it)
+        } ?: ""
     }
 
-    private fun savePhoneNumber() {
-        phoneNumberEditText.text?.toString()?.let {
-            Utils.savePhoneNumbers(this, Utils.csvToList(it))
-        }
+    private fun savePhoneNumber(phoneNumber: String) {
+        Utils.savePhoneNumbers(this, Utils.csvToList(phoneNumber))
     }
 
     private fun checkPermissions() {
@@ -122,6 +152,47 @@ class MainActivity : AppCompatActivity() {
         if (requestCode == REQUEST_SMS_PERMISSION) {
             // check permissions again, we may need to look for more
             checkPermissions()
+        }
+    }
+}
+
+@Composable
+fun PhoneNumberScreen(
+    phoneNumber: String,
+    onPhoneNumberChange: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = stringResource(id = R.string.phone_number_label),
+            style = MaterialTheme.typography.body1,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        TextField(
+            value = phoneNumber,
+            onValueChange = onPhoneNumberChange,
+            modifier = Modifier.width(200.dp),
+            placeholder = { Text(text = stringResource(id = R.string.phone_number_hint)) },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Phone,
+                imeAction = ImeAction.Done
+            ),
+            singleLine = true
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun PhoneNumberScreenPreview() {
+    MaterialTheme {
+        Surface {
+            PhoneNumberScreen(phoneNumber = "555-1234", onPhoneNumberChange = {})
         }
     }
 }
