@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ensureSmsPermissionOnStart()
         enableEdgeToEdge()
         setContent {
             CobaltCometTheme {
@@ -76,6 +77,16 @@ class MainActivity : ComponentActivity() {
         super.onPause()
 
         savePhoneNumber(phoneNumber)
+    }
+
+    private fun ensureSmsPermissionOnStart() {
+        if (!hasSmsPermission()) {
+            requestSmsPermission()
+            return
+        }
+
+        // SMS permission already granted, continue checking additional permissions.
+        checkPermissions()
     }
 
     private fun loadPhoneNumber(): String {
