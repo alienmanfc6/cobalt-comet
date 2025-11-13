@@ -8,12 +8,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -31,9 +30,25 @@ class ShareReceiverActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        val phoneNumbers = Utils.loadPhoneNumbers(this).orEmpty()
+
+        if (phoneNumbers.size == 1) {
+            handleIntent(phoneNumbers.first())
+            finish()
+            return
+        }
+
         setContent {
             CobaltCometTheme {
-                Text("Hello World")
+                ShareReceiverScreen(
+                    phoneNumbers = phoneNumbers,
+                    showYelpError = shouldShowYelpErrorMessage,
+                    onSelectNumber = { selectedNumber ->
+                        handleIntent(selectedNumber)
+                        finish()
+                    }
+                )
             }
         }
     }
@@ -87,5 +102,82 @@ class ShareReceiverActivity : ComponentActivity() {
 
     private fun showErrorMessage(message: String) {
         //TODO: show error message
+    }
+}
+
+@Composable
+private fun ShareReceiverScreen(
+    phoneNumbers: List<String>,
+    showYelpError: Boolean,
+    onSelectNumber: (String) -> Unit
+) {
+    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .padding(innerPadding)
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Select a phone number",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            if (showYelpError) {
+                Text(
+                    text = "Yelp: Please use View Map -> Menu -> Open In Google Map.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+
+            if (phoneNumbers.isEmpty()) {
+                Text(
+                    text = "No saved phone numbers.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(phoneNumbers) { number ->
+                        PhoneNumberRow(number = number, onSelectNumber = onSelectNumber)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PhoneNumberRow(
+    number: String,
+    onSelectNumber: (String) -> Unit
+) {
+    Text(
+        text = number,
+        style = MaterialTheme.typography.bodyLarge,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelectNumber(number) }
+            .padding(vertical = 12.dp, horizontal = 8.dp)
+    )
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun ShareReceiverScreenPreview() {
+    CobaltCometTheme {
+        ShareReceiverScreen(
+            phoneNumbers = listOf("555-0101", "555-0102"),
+            showYelpError = true,
+            onSelectNumber = {}
+        )
     }
 }
