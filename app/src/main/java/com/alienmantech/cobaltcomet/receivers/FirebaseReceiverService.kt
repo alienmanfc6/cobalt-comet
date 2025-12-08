@@ -1,5 +1,6 @@
 package com.alienmantech.cobaltcomet.receivers
 
+import com.alienmantech.cobaltcomet.models.StoredFirebaseMessage
 import com.alienmantech.cobaltcomet.utils.CommunicationUtils
 import com.alienmantech.cobaltcomet.utils.Logger
 import com.alienmantech.cobaltcomet.utils.Utils
@@ -37,6 +38,15 @@ class FirebaseReceiverService: FirebaseMessagingService() {
             }
 
             val from = remoteMessage.data["from"] ?: remoteMessage.from.orEmpty()
+
+            Utils.saveFirebaseMessage(
+                this,
+                StoredFirebaseMessage(
+                    from = from,
+                    body = body,
+                    timestamp = if (remoteMessage.sentTime != 0L) remoteMessage.sentTime else System.currentTimeMillis()
+                )
+            )
 
             if (CommunicationUtils.shouldInterceptMessage(body)) {
                 CommunicationUtils.handleIncomingMessage(this, from, body)

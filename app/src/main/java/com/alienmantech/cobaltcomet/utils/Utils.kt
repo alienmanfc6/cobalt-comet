@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.text.TextUtils
 import androidx.compose.ui.graphics.asImageBitmap
+import com.alienmantech.cobaltcomet.models.StoredFirebaseMessage
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logError
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logWarn
 import com.google.firebase.messaging.FirebaseMessaging
@@ -16,6 +17,7 @@ import com.google.zxing.WriterException
 import com.google.zxing.common.BitMatrix
 import com.google.zxing.qrcode.QRCodeWriter
 import java.util.Locale
+import org.json.JSONArray
 
 class Utils {
     companion object {
@@ -23,7 +25,10 @@ class Utils {
         private const val PREF_FILE_NAME = "PrefFile"
         private const val PREF_PHONE_NUMBER = "phone"
         private const val PREF_FIREBASE_ID = "firebase_id"
+        private const val PREF_FIREBASE_MESSAGES = "firebase_messages"
         private const val PREF_QR_CONTACTS = "qr_contacts"
+
+        private const val MAX_SAVED_FIREBASE_MESSAGES = 50
 
         private const val PHONE_NUMBER_DELIM = "-"
 
@@ -50,6 +55,38 @@ class Utils {
         fun saveFirebaseId(context: Context, firebaseId: String) {
             getSavePref(context).edit()
                 .putString(PREF_FIREBASE_ID, firebaseId)
+                .apply()
+        }
+
+        fun loadFirebaseMessages(context: Context): List<StoredFirebaseMessage> {
+            val stored = getSavePref(context).getString(PREF_FIREBASE_MESSAGES, null) ?: return emptyList()
+
+            return try {
+                val jsonArray = JSONArray(stored)
+                buildList {
+                    for (i in 0 until jsonArray.length()) {
+                        val message = StoredFirebaseMessage.fromJson(jsonArray.optJSONObject(i))
+                        if (message != null) {
+                            add(message)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+
+        fun saveFirebaseMessage(context: Context, message: StoredFirebaseMessage) {
+            val messages = loadFirebaseMessages(context)
+                .takeLast(MAX_SAVED_FIREBASE_MESSAGES - 1)
+                .toMutableList()
+            messages.add(message)
+
+            val jsonArray = JSONArray()
+            messages.forEach { jsonArray.put(it.toJson()) }
+
+            getSavePref(context).edit()
+                .putString(PREF_FIREBASE_MESSAGES, jsonArray.toString())
                 .apply()
         }
 
