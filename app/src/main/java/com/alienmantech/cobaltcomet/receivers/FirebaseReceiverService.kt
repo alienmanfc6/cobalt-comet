@@ -1,5 +1,7 @@
 package com.alienmantech.cobaltcomet.receivers
 
+import com.alienmantech.cobaltcomet.utils.CommunicationUtils
+import com.alienmantech.cobaltcomet.utils.Logger
 import com.alienmantech.cobaltcomet.utils.Utils
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -16,12 +18,31 @@ class FirebaseReceiverService: FirebaseMessagingService() {
 
         // Check if message contains a data payload.
         if (remoteMessage.data.isNotEmpty()) {
-            //TODO: parse incoming message
+            handleDataPayload(remoteMessage)
         }
 
         // Check if message contains a notification payload.
         remoteMessage.notification?.let {
 
+        }
+    }
+
+    private fun handleDataPayload(remoteMessage: RemoteMessage) {
+        try {
+            val body = remoteMessage.data["body"] ?: remoteMessage.data["message"] ?: ""
+
+            if (body.isEmpty()) {
+                Logger.logInfo("Firebase message missing body; ignoring.")
+                return
+            }
+
+            val from = remoteMessage.data["from"] ?: remoteMessage.from.orEmpty()
+
+            if (CommunicationUtils.shouldInterceptMessage(body)) {
+                CommunicationUtils.handleIncomingMessage(this, from, body)
+            }
+        } catch (e: Exception) {
+            Logger.logError("Unable to parse firebase message.", e)
         }
     }
 }
