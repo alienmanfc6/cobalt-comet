@@ -14,6 +14,7 @@ class Utils {
 
         private const val PREF_FILE_NAME = "PrefFile"
         private const val PREF_PHONE_NUMBER = "phone"
+        private const val PREF_FIREBASE_ID = "firebase_id"
 
         private const val PHONE_NUMBER_DELIM = "-"
 
@@ -30,6 +31,16 @@ class Utils {
         fun savePhoneNumbers(context: Context, phoneNumber: List<String>) {
             getSavePref(context).edit()
                 .putString(PREF_PHONE_NUMBER, listToCsv(phoneNumber))
+                .apply()
+        }
+
+        fun loadFirebaseId(context: Context): String? {
+            return getSavePref(context).getString(PREF_FIREBASE_ID, null)
+        }
+
+        fun saveFirebaseId(context: Context, firebaseId: String) {
+            getSavePref(context).edit()
+                .putString(PREF_FIREBASE_ID, firebaseId)
                 .apply()
         }
 
