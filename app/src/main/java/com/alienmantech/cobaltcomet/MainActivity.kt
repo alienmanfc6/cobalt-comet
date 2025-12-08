@@ -10,13 +10,15 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -29,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -66,6 +67,12 @@ class MainActivity : ComponentActivity() {
                                 phoneNumber = updatedValue
                             }
                         )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        ScannerLauncher(onLaunchScanner = {
+                            startActivity(Intent(this, QrScannerActivity::class.java))
+                        })
 
                         FirebaseIdScreen()
                     }
@@ -205,6 +212,25 @@ fun PhoneNumberScreen(
             ),
             singleLine = true
         )
+    }
+}
+
+@Composable
+fun ScannerLauncher(onLaunchScanner: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Scan a Firebase ID token",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        Button(onClick = onLaunchScanner) {
+            Text(text = "Open QR Scanner")
+        }
     }
 }
 
