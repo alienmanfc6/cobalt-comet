@@ -71,7 +71,7 @@ class MainActivity : ComponentActivity() {
                         Spacer(modifier = Modifier.height(8.dp))
 
                         ScannerLauncher(onLaunchScanner = {
-                            startActivity(Intent(this, QrScannerActivity::class.java))
+                            startActivity(Intent(this@MainActivity, QrScannerActivity::class.java))
                         })
 
                         FirebaseIdScreen()
