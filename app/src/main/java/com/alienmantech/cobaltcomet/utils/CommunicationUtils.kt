@@ -4,6 +4,8 @@ import android.content.Context
 import android.telephony.SmsManager
 import android.text.TextUtils
 import com.alienmantech.cobaltcomet.models.MessageModel
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
 
 class CommunicationUtils {
     companion object {
@@ -86,6 +88,24 @@ class CommunicationUtils {
             message.lat = lat
             message.lng = lng
             return SMS_PREFIX + message.toString()
+        }
+
+        fun sendFirebaseMessage(to: String, body: String, onComplete: (Boolean) -> Unit = {}) {
+            val sanitizedBody = body.ifEmpty { "" }
+
+            val payload = mapOf(
+                "to" to to,
+                "body" to sanitizedBody,
+                "timestamp" to System.currentTimeMillis()
+            )
+
+            Firebase.firestore.collection("messages")
+                .add(payload)
+                .addOnSuccessListener { onComplete(true) }
+                .addOnFailureListener {
+                    Logger.logError("Failed to send message via Firebase", it)
+                    onComplete(false)
+                }
         }
 
         fun decodeMessage(text: String): MessageModel? {

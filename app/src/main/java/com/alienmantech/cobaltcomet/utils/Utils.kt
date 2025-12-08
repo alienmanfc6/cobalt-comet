@@ -3,17 +3,32 @@ package com.alienmantech.cobaltcomet.utils
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.net.Uri
 import android.text.TextUtils
+import androidx.compose.ui.graphics.asImageBitmap
+import com.alienmantech.cobaltcomet.models.StoredFirebaseMessage
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logError
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logWarn
+import com.google.firebase.messaging.FirebaseMessaging
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.WriterException
+import com.google.zxing.common.BitMatrix
+import com.google.zxing.qrcode.QRCodeWriter
 import java.util.Locale
+import org.json.JSONArray
 
 class Utils {
     companion object {
 
         private const val PREF_FILE_NAME = "PrefFile"
         private const val PREF_PHONE_NUMBER = "phone"
+        private const val PREF_FIREBASE_ID = "firebase_id"
+        private const val PREF_FIREBASE_MESSAGES = "firebase_messages"
+        private const val PREF_QR_CONTACTS = "qr_contacts"
+
+        private const val MAX_SAVED_FIREBASE_MESSAGES = 50
 
         private const val PHONE_NUMBER_DELIM = "-"
 
@@ -30,6 +45,70 @@ class Utils {
         fun savePhoneNumbers(context: Context, phoneNumber: List<String>) {
             getSavePref(context).edit()
                 .putString(PREF_PHONE_NUMBER, listToCsv(phoneNumber))
+                .apply()
+        }
+
+        fun loadFirebaseId(context: Context): String? {
+            return getSavePref(context).getString(PREF_FIREBASE_ID, null)
+        }
+
+        fun saveFirebaseId(context: Context, firebaseId: String) {
+            getSavePref(context).edit()
+                .putString(PREF_FIREBASE_ID, firebaseId)
+                .apply()
+        }
+
+        fun loadFirebaseMessages(context: Context): List<StoredFirebaseMessage> {
+            val stored = getSavePref(context).getString(PREF_FIREBASE_MESSAGES, null) ?: return emptyList()
+
+            return try {
+                val jsonArray = JSONArray(stored)
+                buildList {
+                    for (i in 0 until jsonArray.length()) {
+                        val message = StoredFirebaseMessage.fromJson(jsonArray.optJSONObject(i))
+                        if (message != null) {
+                            add(message)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+
+        fun saveFirebaseMessage(context: Context, message: StoredFirebaseMessage) {
+            val messages = loadFirebaseMessages(context)
+                .takeLast(MAX_SAVED_FIREBASE_MESSAGES - 1)
+                .toMutableList()
+            messages.add(message)
+
+            val jsonArray = JSONArray()
+            messages.forEach { jsonArray.put(it.toJson()) }
+
+            getSavePref(context).edit()
+                .putString(PREF_FIREBASE_MESSAGES, jsonArray.toString())
+                .apply()
+        }
+
+        fun loadQrContacts(context: Context): Map<String, String> {
+            val stored = getSavePref(context).getString(PREF_QR_CONTACTS, null) ?: return emptyMap()
+
+            return try {
+                val jsonObject = org.json.JSONObject(stored)
+                jsonObject.keys().asSequence().associateWith { key -> jsonObject.getString(key) }
+            } catch (e: Exception) {
+                emptyMap()
+            }
+        }
+
+        fun saveQrContacts(context: Context, contacts: Map<String, String>) {
+            val jsonObject = org.json.JSONObject()
+            contacts.forEach { (name, token) ->
+                jsonObject.put(name, token)
+            }
+
+            getSavePref(context).edit()
+                .putString(PREF_QR_CONTACTS, jsonObject.toString())
                 .apply()
         }
 
@@ -229,6 +308,25 @@ class Utils {
                 sb.append(item)
             }
             return sb.toString()
+        }
+
+        fun generateQrCode(data: String, size: Int = 800): androidx.compose.ui.graphics.ImageBitmap? {
+            return try {
+                val bitMatrix: BitMatrix = QRCodeWriter().encode(data, BarcodeFormat.QR_CODE, size, size)
+                val width = bitMatrix.width
+                val height = bitMatrix.height
+                val pixels = IntArray(width * height)
+                for (y in 0 until height) {
+                    for (x in 0 until width) {
+                        pixels[y * width + x] = if (bitMatrix[x, y]) Color.BLACK else Color.WHITE
+                    }
+                }
+                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+                bitmap.asImageBitmap()
+            } catch (_: WriterException) {
+                null
+            }
         }
     }
 }
