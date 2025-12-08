@@ -4,12 +4,26 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.EditText
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.alienmantech.cobaltcomet.utils.Utils
+import com.alienmantech.cobaltcomet.ui.theme.CobaltCometTheme
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.ktx.app
 import com.journeyapps.barcodescanner.BarcodeCallback
@@ -28,7 +42,7 @@ import com.nimbusds.jwt.SignedJWT
 import java.net.URL
 import java.util.Date
 
-class QrScannerActivity : AppCompatActivity() {
+class QrScannerActivity : ComponentActivity() {
 
     companion object {
         private const val REQUEST_CAMERA_PERMISSION = 2001
@@ -40,24 +54,25 @@ class QrScannerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_qr_scanner)
+        setContent {
+            CobaltCometTheme {
+                QrScannerScreen(
+                    onBarcodeDetected = { token ->
+                        if (isHandlingResult) return@QrScannerScreen
 
-        barcodeView = findViewById(R.id.barcode_scanner)
-        barcodeView.decodeContinuous(object : BarcodeCallback {
-            override fun barcodeResult(result: BarcodeResult) {
-                if (isHandlingResult) return
-
-                isHandlingResult = true
-                barcodeView.pause()
-                handleScanResult(result.text)
+                        isHandlingResult = true
+                        barcodeView.pause()
+                        handleScanResult(token)
+                    },
+                    onBarcodeViewReady = { view ->
+                        barcodeView = view
+                        checkCameraPermissionAndStart()
+                    },
+                    requestPermission = { requestCameraPermission() },
+                    hasPermission = { hasCameraPermission() }
+                )
             }
-
-            override fun possibleResultPoints(resultPoints: MutableList<com.google.zxing.ResultPoint>?) {
-                // no-op
-            }
-        })
-
-        checkCameraPermissionAndStart()
+        }
     }
 
     override fun onResume() {
@@ -68,7 +83,9 @@ class QrScannerActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
-        barcodeView.pause()
+        if (::barcodeView.isInitialized) {
+            barcodeView.pause()
+        }
         super.onPause()
     }
 
@@ -85,7 +102,7 @@ class QrScannerActivity : AppCompatActivity() {
         if (hasCameraPermission()) {
             startScanning()
         } else {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), REQUEST_CAMERA_PERMISSION)
+            requestCameraPermission()
         }
     }
 
@@ -93,9 +110,15 @@ class QrScannerActivity : AppCompatActivity() {
         return ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
     }
 
+    private fun requestCameraPermission() {
+        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), REQUEST_CAMERA_PERMISSION)
+    }
+
     private fun startScanning() {
         isHandlingResult = false
-        barcodeView.resume()
+        if (::barcodeView.isInitialized) {
+            barcodeView.resume()
+        }
     }
 
     private fun handleScanResult(rawValue: String?) {
@@ -185,5 +208,79 @@ class QrScannerActivity : AppCompatActivity() {
                 finish()
             }
             .show()
+    }
+}
+
+@Composable
+fun QrScannerScreen(
+    onBarcodeDetected: (String?) -> Unit,
+    onBarcodeViewReady: (DecoratedBarcodeView) -> Unit,
+    requestPermission: () -> Unit,
+    hasPermission: () -> Boolean,
+    modifier: Modifier = Modifier
+) {
+    var barcodeView by remember { mutableStateOf<DecoratedBarcodeView?>(null) }
+
+    LaunchedEffect(hasPermission()) {
+        if (!hasPermission()) {
+            requestPermission()
+        } else {
+            barcodeView?.resume()
+        }
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        DecoratedBarcodeAndroidView(
+            onBarcodeDetected = onBarcodeDetected,
+            onBarcodeViewReady = {
+                barcodeView = it
+                onBarcodeViewReady(it)
+            }
+        )
+
+        if (!hasPermission()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        }
+    }
+}
+
+@Composable
+private fun DecoratedBarcodeAndroidView(
+    onBarcodeDetected: (String?) -> Unit,
+    onBarcodeViewReady: (DecoratedBarcodeView) -> Unit
+) {
+    androidx.compose.ui.viewinterop.AndroidView(
+        factory = { ctx ->
+            DecoratedBarcodeView(ctx).apply {
+                decodeContinuous(object : BarcodeCallback {
+                    override fun barcodeResult(result: BarcodeResult) {
+                        onBarcodeDetected(result.text)
+                    }
+
+                    override fun possibleResultPoints(resultPoints: MutableList<com.google.zxing.ResultPoint>?) {
+                        // no-op
+                    }
+                })
+            }.also(onBarcodeViewReady)
+        },
+        modifier = Modifier.fillMaxSize()
+    )
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun QrScannerScreenPreview() {
+    CobaltCometTheme {
+        QrScannerScreen(
+            onBarcodeDetected = {},
+            onBarcodeViewReady = {},
+            requestPermission = {},
+            hasPermission = { true }
+        )
     }
 }
