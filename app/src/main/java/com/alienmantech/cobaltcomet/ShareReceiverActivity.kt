@@ -31,10 +31,10 @@ class ShareReceiverActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val phoneNumbers = Utils.loadPhoneNumbers(this).orEmpty()
+        val shareTargets = buildShareTargets()
 
-        if (phoneNumbers.size == 1) {
-            handleIntent(phoneNumbers.first())
+        if (shareTargets.size == 1) {
+            handleIntent(shareTargets.first())
             finish()
             return
         }
@@ -42,10 +42,10 @@ class ShareReceiverActivity : ComponentActivity() {
         setContent {
             CobaltCometTheme {
                 ShareReceiverScreen(
-                    phoneNumbers = phoneNumbers,
+                    shareTargets = shareTargets,
                     showYelpError = shouldShowYelpErrorMessage,
-                    onSelectNumber = { selectedNumber ->
-                        handleIntent(selectedNumber)
+                    onSelectNumber = { selectedTarget ->
+                        handleIntent(selectedTarget)
                         finish()
                     }
                 )
@@ -53,12 +53,35 @@ class ShareReceiverActivity : ComponentActivity() {
         }
     }
 
-    private fun handleIntent(to: String) {
+    private fun buildShareTargets(): List<ShareTarget> {
+        val phoneNumbers = Utils.loadPhoneNumbers(this).orEmpty()
+        val firebaseContacts = Utils.loadQrContacts(this)
+
+        val phoneTargets = phoneNumbers.map { number ->
+            ShareTarget(
+                id = number,
+                displayName = number,
+                type = ShareTargetType.PHONE,
+            )
+        }
+
+        val firebaseTargets = firebaseContacts.map { (name, token) ->
+            ShareTarget(
+                id = token,
+                displayName = "$name (Firebase)",
+                type = ShareTargetType.FIREBASE,
+            )
+        }
+
+        return phoneTargets + firebaseTargets
+    }
+
+    private fun handleIntent(target: ShareTarget) {
         if (intent.action.equals(Intent.ACTION_SEND)) {
             if (intent.type.equals("text/plain")) {
                 intent.getStringExtra(Intent.EXTRA_TEXT)?.let { clipText ->
                     // send encoded data and map link together
-                    sendMessage(to, CommunicationUtils.encodeUrlMessage(clipText))
+                    sendMessage(target, CommunicationUtils.encodeUrlMessage(clipText))
                 }
             }
         } else if (intent.action.equals(Intent.ACTION_VIEW)) {
@@ -70,14 +93,17 @@ class ShareReceiverActivity : ComponentActivity() {
                         .replace(query, "")
                         .replace("?", "")
                         .split(",")
-                    sendMessage(to, CommunicationUtils.encodeGeoMessage(values[0], values[1]))
+                    sendMessage(target, CommunicationUtils.encodeGeoMessage(values[0], values[1]))
                 }
             }
         }
     }
 
-    private fun sendMessage(to: String, message: String) {
-        CommunicationUtils.sendMessage(to, message)
+    private fun sendMessage(target: ShareTarget, message: String) {
+        when (target.type) {
+            ShareTargetType.PHONE -> CommunicationUtils.sendMessage(target.id, message)
+            ShareTargetType.FIREBASE -> CommunicationUtils.sendFirebaseMessage(target.id, message)
+        }
     }
 
     private val shouldShowYelpErrorMessage: Boolean
@@ -105,9 +131,9 @@ class ShareReceiverActivity : ComponentActivity() {
 
 @Composable
 private fun ShareReceiverScreen(
-    phoneNumbers: List<String>,
+    shareTargets: List<ShareTarget>,
     showYelpError: Boolean,
-    onSelectNumber: (String) -> Unit
+    onSelectNumber: (ShareTarget) -> Unit,
 ) {
     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
         Column(
@@ -119,7 +145,7 @@ private fun ShareReceiverScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Select a phone number",
+                text = "Select a contact",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -132,9 +158,9 @@ private fun ShareReceiverScreen(
                 )
             }
 
-            if (phoneNumbers.isEmpty()) {
+            if (shareTargets.isEmpty()) {
                 Text(
-                    text = "No saved phone numbers.",
+                    text = "No saved contacts.",
                     style = MaterialTheme.typography.bodyMedium
                 )
             } else {
@@ -144,8 +170,8 @@ private fun ShareReceiverScreen(
                         .weight(1f, fill = false),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(phoneNumbers) { number ->
-                        PhoneNumberRow(number = number, onSelectNumber = onSelectNumber)
+                    items(shareTargets) { target ->
+                        ContactRow(target = target, onSelectNumber = onSelectNumber)
                     }
                 }
             }
@@ -154,16 +180,16 @@ private fun ShareReceiverScreen(
 }
 
 @Composable
-private fun PhoneNumberRow(
-    number: String,
-    onSelectNumber: (String) -> Unit
+private fun ContactRow(
+    target: ShareTarget,
+    onSelectNumber: (ShareTarget) -> Unit,
 ) {
     Text(
-        text = number,
+        text = target.displayName,
         style = MaterialTheme.typography.bodyLarge,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onSelectNumber(number) }
+            .clickable { onSelectNumber(target) }
             .padding(vertical = 12.dp, horizontal = 8.dp)
     )
 }
@@ -173,9 +199,31 @@ private fun PhoneNumberRow(
 private fun ShareReceiverScreenPreview() {
     CobaltCometTheme {
         ShareReceiverScreen(
-            phoneNumbers = listOf("555-0101", "555-0102"),
+            shareTargets = listOf(
+                ShareTarget(
+                    id = "555-0101",
+                    displayName = "555-0101",
+                    type = ShareTargetType.PHONE,
+                ),
+                ShareTarget(
+                    id = "abc123",
+                    displayName = "Friend (Firebase)",
+                    type = ShareTargetType.FIREBASE,
+                ),
+            ),
             showYelpError = true,
-            onSelectNumber = {}
+            onSelectNumber = {},
         )
     }
+}
+
+private data class ShareTarget(
+    val id: String,
+    val displayName: String,
+    val type: ShareTargetType,
+)
+
+private enum class ShareTargetType {
+    PHONE,
+    FIREBASE,
 }
