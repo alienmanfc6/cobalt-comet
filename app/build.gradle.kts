@@ -52,6 +52,7 @@ dependencies {
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.messaging)
+    implementation(libs.google.auth.library.oauth2.http)
     implementation(libs.zxing.core)
     implementation(libs.zxing.android.embedded)
     implementation(libs.nimbus.jose.jwt)
