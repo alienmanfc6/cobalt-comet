@@ -3,11 +3,18 @@ package com.alienmantech.cobaltcomet.utils
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Bitmap
+import android.graphics.Color
 import android.net.Uri
 import android.text.TextUtils
+import androidx.compose.ui.graphics.asImageBitmap
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logError
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logWarn
 import com.google.firebase.messaging.FirebaseMessaging
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.WriterException
+import com.google.zxing.common.BitMatrix
+import com.google.zxing.qrcode.QRCodeWriter
 import java.util.Locale
 
 class Utils {
@@ -19,8 +26,6 @@ class Utils {
         private const val PREF_QR_CONTACTS = "qr_contacts"
 
         private const val PHONE_NUMBER_DELIM = "-"
-
-        fun loadFirebaseId() = FirebaseMessaging.getInstance().token
 
         fun getSavePref(context: Context): SharedPreferences {
             return context.getSharedPreferences(PREF_FILE_NAME, Context.MODE_PRIVATE);
@@ -55,7 +60,6 @@ class Utils {
                 val jsonObject = org.json.JSONObject(stored)
                 jsonObject.keys().asSequence().associateWith { key -> jsonObject.getString(key) }
             } catch (e: Exception) {
-                logWarn("Unable to load QR contacts", e)
                 emptyMap()
             }
         }
@@ -267,6 +271,25 @@ class Utils {
                 sb.append(item)
             }
             return sb.toString()
+        }
+
+        fun generateQrCode(data: String, size: Int = 800): androidx.compose.ui.graphics.ImageBitmap? {
+            return try {
+                val bitMatrix: BitMatrix = QRCodeWriter().encode(data, BarcodeFormat.QR_CODE, size, size)
+                val width = bitMatrix.width
+                val height = bitMatrix.height
+                val pixels = IntArray(width * height)
+                for (y in 0 until height) {
+                    for (x in 0 until width) {
+                        pixels[y * width + x] = if (bitMatrix[x, y]) Color.BLACK else Color.WHITE
+                    }
+                }
+                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+                bitmap.asImageBitmap()
+            } catch (_: WriterException) {
+                null
+            }
         }
     }
 }

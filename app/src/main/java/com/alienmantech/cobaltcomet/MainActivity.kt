@@ -8,10 +8,12 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
@@ -22,12 +24,15 @@ import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
@@ -50,7 +55,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             CobaltCometTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Box(
+                    Column(
                         modifier = Modifier
                             .padding(innerPadding)
                             .fillMaxSize()
@@ -61,6 +66,8 @@ class MainActivity : ComponentActivity() {
                                 phoneNumber = updatedValue
                             }
                         )
+
+                        FirebaseIdScreen()
                     }
                 }
             }
@@ -177,7 +184,7 @@ fun PhoneNumberScreen(
 ) {
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
@@ -198,6 +205,48 @@ fun PhoneNumberScreen(
             ),
             singleLine = true
         )
+    }
+}
+
+@Composable
+fun FirebaseIdScreen() {
+    var token by remember { mutableStateOf<String?>(null) }
+
+    token = Utils.loadFirebaseId(LocalContext.current)
+
+    val qrBitmap = remember(token) {
+        token?.let { Utils.generateQrCode(it) }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Firebase Cloud ID",
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+
+        when {
+            qrBitmap != null -> {
+                Image(
+                    bitmap = qrBitmap,
+                    contentDescription = "Firebase Cloud ID QR code",
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+            }
+
+            else -> {
+                Text(
+                    text = "Unable to load QR code.",
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
     }
 }
 

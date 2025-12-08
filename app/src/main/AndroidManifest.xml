@@ -35,12 +35,6 @@
         </activity>
 
         <activity
-            android:name=".FirebaseIdActivity"
-            android:exported="false"
-            android:label="Firebase Cloud ID"
-            android:theme="@style/Theme.CobaltComet" />
-
-        <activity
             android:name=".QrScannerActivity"
             android:exported="false"
             android:theme="@style/Theme.CobaltComet" />
