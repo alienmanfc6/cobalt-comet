@@ -16,6 +16,7 @@ class Utils {
         private const val PREF_FILE_NAME = "PrefFile"
         private const val PREF_PHONE_NUMBER = "phone"
         private const val PREF_FIREBASE_ID = "firebase_id"
+        private const val PREF_QR_CONTACTS = "qr_contacts"
 
         private const val PHONE_NUMBER_DELIM = "-"
 
@@ -44,6 +45,29 @@ class Utils {
         fun saveFirebaseId(context: Context, firebaseId: String) {
             getSavePref(context).edit()
                 .putString(PREF_FIREBASE_ID, firebaseId)
+                .apply()
+        }
+
+        fun loadQrContacts(context: Context): Map<String, String> {
+            val stored = getSavePref(context).getString(PREF_QR_CONTACTS, null) ?: return emptyMap()
+
+            return try {
+                val jsonObject = org.json.JSONObject(stored)
+                jsonObject.keys().asSequence().associateWith { key -> jsonObject.getString(key) }
+            } catch (e: Exception) {
+                logWarn("Unable to load QR contacts", e)
+                emptyMap()
+            }
+        }
+
+        fun saveQrContacts(context: Context, contacts: Map<String, String>) {
+            val jsonObject = org.json.JSONObject()
+            contacts.forEach { (name, token) ->
+                jsonObject.put(name, token)
+            }
+
+            getSavePref(context).edit()
+                .putString(PREF_QR_CONTACTS, jsonObject.toString())
                 .apply()
         }
 
