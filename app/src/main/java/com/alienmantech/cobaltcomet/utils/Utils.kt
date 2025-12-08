@@ -7,6 +7,7 @@ import android.net.Uri
 import android.text.TextUtils
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logError
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logWarn
+import com.google.firebase.messaging.FirebaseMessaging
 import java.util.Locale
 
 class Utils {
@@ -17,6 +18,8 @@ class Utils {
         private const val PREF_FIREBASE_ID = "firebase_id"
 
         private const val PHONE_NUMBER_DELIM = "-"
+
+        fun loadFirebaseId() = FirebaseMessaging.getInstance().token
 
         fun getSavePref(context: Context): SharedPreferences {
             return context.getSharedPreferences(PREF_FILE_NAME, Context.MODE_PRIVATE);
