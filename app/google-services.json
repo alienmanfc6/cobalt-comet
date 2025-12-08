@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "1088144610090",
+    "project_id": "alienmantechnologies",
+    "storage_bucket": "alienmantechnologies.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1088144610090:android:dc16390d41b956b600c453",
+        "android_client_info": {
+          "package_name": "com.alienmantech.cobaltcomet"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1088144610090-1ht4mbjrt40metbj33d1t50avfl3a1q2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDnNNcJIkJi73vEzhLq71wMzwpL0bTJkLI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1088144610090-1ht4mbjrt40metbj33d1t50avfl3a1q2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1088144610090:android:85c2d2e73225076100c453",
+        "android_client_info": {
+          "package_name": "com.alienmantech.copilot"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1088144610090-1ht4mbjrt40metbj33d1t50avfl3a1q2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDnNNcJIkJi73vEzhLq71wMzwpL0bTJkLI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1088144610090-1ht4mbjrt40metbj33d1t50avfl3a1q2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
