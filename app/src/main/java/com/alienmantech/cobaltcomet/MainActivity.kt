@@ -17,7 +17,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Divider
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -38,8 +41,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.alienmantech.cobaltcomet.models.StoredFirebaseMessage
 import com.alienmantech.cobaltcomet.ui.theme.CobaltCometTheme
 import com.alienmantech.cobaltcomet.utils.Utils
+import java.text.DateFormat
+import java.util.Date
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -75,6 +81,8 @@ class MainActivity : ComponentActivity() {
                         })
 
                         FirebaseIdScreen()
+
+                        FirebaseMessagesScreen(modifier = Modifier.weight(1f, fill = true))
                     }
                 }
             }
@@ -246,9 +254,8 @@ fun FirebaseIdScreen() {
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp),
-        verticalArrangement = Arrangement.Center,
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
@@ -281,5 +288,78 @@ fun FirebaseIdScreen() {
 fun PhoneNumberScreenPreview() {
     MaterialTheme {
         PhoneNumberScreen(phoneNumber = "555-1234", onPhoneNumberChange = {})
+    }
+}
+
+@Composable
+fun FirebaseMessagesScreen(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val messages = remember(context) {
+        Utils.loadFirebaseMessages(context).sortedByDescending { it.timestamp }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = "Firebase Messages",
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        if (messages.isEmpty()) {
+            Text(
+                text = "No messages received yet.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = true)
+            ) {
+                items(messages) { message ->
+                    FirebaseMessageRow(message)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FirebaseMessageRow(message: StoredFirebaseMessage) {
+    val formattedTimestamp = remember(message.timestamp) {
+        DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+            .format(Date(message.timestamp))
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+    ) {
+        if (message.from.isNotBlank()) {
+            Text(
+                text = "From: ${message.from}",
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+        }
+
+        Text(
+            text = message.body,
+            style = MaterialTheme.typography.bodyLarge
+        )
+
+        Text(
+            text = formattedTimestamp,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+
+        Divider(modifier = Modifier.padding(top = 8.dp))
     }
 }
