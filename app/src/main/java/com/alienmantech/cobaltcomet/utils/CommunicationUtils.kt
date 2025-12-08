@@ -69,7 +69,16 @@ class CommunicationUtils {
                 }
             }
 
-            return SMS_PREFIX + message.toString()
+            return buildString {
+                append(SMS_PREFIX)
+                append(message.toString())
+
+                // include the url as plain text to keep the map link in the same SMS message
+                if (message.url.isNotEmpty()) {
+                    append("\n")
+                    append(message.url)
+                }
+            }
         }
 
         fun encodeGeoMessage(lat: String, lng: String): String {
@@ -84,12 +93,23 @@ class CommunicationUtils {
                 return null
             }
 
-            val message = MessageModel()
-            if (text.startsWith(SMS_PREFIX)) {
-                message.fromJson(text.replace(SMS_PREFIX, ""))
+            val content = if (text.startsWith(SMS_PREFIX)) {
+                text.replaceFirst(SMS_PREFIX, "")
             } else {
-                message.fromJson(text)
+                text
             }
+
+            val parts = content.split("\n", limit = 2)
+            val jsonPart = parts.getOrNull(0) ?: return null
+            val extraUrl = parts.getOrNull(1)
+
+            val message = MessageModel()
+            message.fromJson(jsonPart)
+
+            if (message.url.isEmpty() && !extraUrl.isNullOrEmpty()) {
+                message.url = extraUrl
+            }
+
             return message
         }
 

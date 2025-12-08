@@ -57,10 +57,8 @@ class ShareReceiverActivity : ComponentActivity() {
         if (intent.action.equals(Intent.ACTION_SEND)) {
             if (intent.type.equals("text/plain")) {
                 intent.getStringExtra(Intent.EXTRA_TEXT)?.let { clipText ->
-                    // send encoded data
+                    // send encoded data and map link together
                     sendMessage(to, CommunicationUtils.encodeUrlMessage(clipText))
-                    // send just the url
-                    Utils.parseUrl(clipText)?.let { url -> sendMessage(to, url) }
                 }
             }
         } else if (intent.action.equals(Intent.ACTION_VIEW)) {
