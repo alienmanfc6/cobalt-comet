@@ -25,30 +25,37 @@ class CommunicationUtils {
             Logger.logInfo("handleIncomingMessage: $text")
 
             decodeMessage(text)?.let { message ->
-                var navigationLaunched = false
-                if (message.lat.isNotEmpty() && message.lng.isNotEmpty()) {
-                    val destination = if (message.locationName.isNotEmpty()) {
-                        "${message.lat},${message.lng}(${message.locationName})"
-                    } else {
-                        "${message.lat},${message.lng}"
-                    }
-                    navigationLaunched =
-                        Utils.launchGoogleMapsNavigation(context, destination)
-                } else if (message.locationName.isNotEmpty()) {
-                    navigationLaunched = Utils.launchGoogleMapsNavigation(context, message.locationName)
+                message.from = from
+                message.receivedAt = System.currentTimeMillis()
+                Utils.saveMessage(context, message)
+                handleMessageAction(context, message)
+            }
+        }
+
+        fun handleMessageAction(context: Context, message: MessageModel) {
+            var navigationLaunched = false
+            if (message.lat.isNotEmpty() && message.lng.isNotEmpty()) {
+                val destination = if (message.locationName.isNotEmpty()) {
+                    "${message.lat},${message.lng}(${message.locationName})"
+                } else {
+                    "${message.lat},${message.lng}"
+                }
+                navigationLaunched =
+                    Utils.launchGoogleMapsNavigation(context, destination)
+            } else if (message.locationName.isNotEmpty()) {
+                navigationLaunched = Utils.launchGoogleMapsNavigation(context, message.locationName)
+            }
+
+            if (message.url.isNotEmpty()) {
+                val handledByMaps = if (!navigationLaunched) {
+                    Utils.tryLaunchGoogleMapsFromUrl(context, message.url)
+                } else {
+                    false
                 }
 
-                if (message.url.isNotEmpty()) {
-                    val handledByMaps = if (!navigationLaunched) {
-                        Utils.tryLaunchGoogleMapsFromUrl(context, message.url)
-                    } else {
-                        false
-                    }
-
-                    if (!handledByMaps) {
-                        if (!navigationLaunched || !Utils.isGoogleMapsUrl(message.url)) {
-                            Utils.launchWebBrowser(context, message.url)
-                        }
+                if (!handledByMaps) {
+                    if (!navigationLaunched || !Utils.isGoogleMapsUrl(message.url)) {
+                        Utils.launchWebBrowser(context, message.url)
                     }
                 }
             }

@@ -5,15 +5,19 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import android.text.TextUtils
+import com.alienmantech.cobaltcomet.models.MessageModel
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logError
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logWarn
 import java.util.Locale
+import org.json.JSONArray
 
 class Utils {
     companion object {
 
         private const val PREF_FILE_NAME = "PrefFile"
         private const val PREF_PHONE_NUMBER = "phone"
+        private const val PREF_MESSAGES = "messages"
+        private const val MAX_SAVED_MESSAGES = 10
 
         private const val PHONE_NUMBER_DELIM = "-"
 
@@ -30,6 +34,40 @@ class Utils {
         fun savePhoneNumbers(context: Context, phoneNumber: List<String>) {
             getSavePref(context).edit()
                 .putString(PREF_PHONE_NUMBER, listToCsv(phoneNumber))
+                .apply()
+        }
+
+        fun loadMessages(context: Context): List<MessageModel> {
+            val saved = getSavePref(context).getString(PREF_MESSAGES, null) ?: return emptyList()
+            return try {
+                val array = JSONArray(saved)
+                val messages = mutableListOf<MessageModel>()
+                for (i in 0 until array.length()) {
+                    val jsonObject = array.optJSONObject(i) ?: continue
+                    val message = MessageModel()
+                    message.fromJson(jsonObject)
+                    messages.add(message)
+                }
+                messages
+            } catch (e: Exception) {
+                logError("Unable to load saved messages", e)
+                emptyList()
+            }
+        }
+
+        fun saveMessage(context: Context, message: MessageModel) {
+            val existing = loadMessages(context).toMutableList()
+            existing.add(0, message)
+
+            val limited = existing.take(MAX_SAVED_MESSAGES)
+
+            val array = JSONArray()
+            for (item in limited) {
+                array.put(item.toJson())
+            }
+
+            getSavePref(context).edit()
+                .putString(PREF_MESSAGES, array.toString())
                 .apply()
         }
 
