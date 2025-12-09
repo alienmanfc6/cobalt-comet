@@ -107,7 +107,7 @@ class ShareReceiverActivity : ComponentActivity() {
     }
 
     private fun sendMessage(to: String, message: String) {
-        CommunicationUtils.sendMessage(to, message)
+        CommunicationUtils.sendMessage(this, to, message)
     }
 
     private val shouldShowYelpErrorMessage: Boolean
