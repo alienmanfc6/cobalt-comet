@@ -27,8 +27,15 @@ class CommunicationUtils {
             decodeMessage(text)?.let { message ->
                 var navigationLaunched = false
                 if (message.lat.isNotEmpty() && message.lng.isNotEmpty()) {
+                    val destination = if (message.locationName.isNotEmpty()) {
+                        "${message.lat},${message.lng}(${message.locationName})"
+                    } else {
+                        "${message.lat},${message.lng}"
+                    }
                     navigationLaunched =
-                        Utils.launchGoogleMapsNavigation(context, message.lat, message.lng)
+                        Utils.launchGoogleMapsNavigation(context, destination)
+                } else if (message.locationName.isNotEmpty()) {
+                    navigationLaunched = Utils.launchGoogleMapsNavigation(context, message.locationName)
                 }
 
                 if (message.url.isNotEmpty()) {
@@ -69,6 +76,10 @@ class CommunicationUtils {
                 }
             }
 
+            if (message.locationName.isEmpty()) {
+                message.locationName = message.textList.firstOrNull().orEmpty()
+            }
+
             return buildString {
                 append(SMS_PREFIX)
                 append(message.toString())
@@ -81,10 +92,11 @@ class CommunicationUtils {
             }
         }
 
-        fun encodeGeoMessage(lat: String, lng: String): String {
+        fun encodeGeoMessage(lat: String, lng: String, locationName: String = ""): String {
             val message = MessageModel()
             message.lat = lat
             message.lng = lng
+            message.locationName = locationName
             return SMS_PREFIX + message.toString()
         }
 

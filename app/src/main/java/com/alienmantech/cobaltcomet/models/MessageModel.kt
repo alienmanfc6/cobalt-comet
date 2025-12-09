@@ -8,7 +8,8 @@ data class MessageModel(
     var textList: MutableList<String> = mutableListOf(),
     var url: String = "",
     var lat: String = "",
-    var lng: String = ""
+    var lng: String = "",
+    var locationName: String = ""
 ) {
 
     fun addText(text: String) {
@@ -30,6 +31,7 @@ data class MessageModel(
         url = jData.optString("url")
         lat = jData.optString("lat")
         lng = jData.optString("lng")
+        locationName = jData.optString("locationName")
     }
 
     fun toJson(): JSONObject {
@@ -51,6 +53,9 @@ data class MessageModel(
         }
         if (lng.isNotEmpty()) {
             jData.put("lng", lng)
+        }
+        if (locationName.isNotEmpty()) {
+            jData.put("locationName", locationName)
         }
         return jData
     }
