@@ -34,6 +34,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
@@ -49,6 +50,7 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val REQUEST_SMS_PERMISSION = 1
         private const val REQUEST_DRAW_PERMISSION = 2
+        private const val REQUEST_CONTACTS_PERMISSION = 3
     }
 
     private var phoneNumber by mutableStateOf("")
@@ -122,6 +124,12 @@ class MainActivity : ComponentActivity() {
             return // don't check the next one till this one is resolved
         }
 
+        // Contacts
+        if (!hasContactsPermission()) {
+            requestContactsPermission()
+            return // don't check the next one till this one is resolved
+        }
+
         // Draw on apps
         if (!hasDrawOnScreenPermission()) {
             requestDrawOnScreenPermission()
@@ -141,6 +149,13 @@ class MainActivity : ComponentActivity() {
 
     private fun hasDrawOnScreenPermission(): Boolean {
         return (Settings.canDrawOverlays(this))
+    }
+
+    private fun hasContactsPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            this@MainActivity,
+            Manifest.permission.READ_CONTACTS
+        ) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun requestSmsPermission() {
@@ -164,6 +179,14 @@ class MainActivity : ComponentActivity() {
 //        dialog.show(supportFragmentManager, "Draw-On-Screen-Dialog")
     }
 
+    private fun requestContactsPermission() {
+        ActivityCompat.requestPermissions(
+            this@MainActivity,
+            arrayOf(Manifest.permission.READ_CONTACTS),
+            REQUEST_CONTACTS_PERMISSION
+        )
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
@@ -179,7 +202,7 @@ class MainActivity : ComponentActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_SMS_PERMISSION) {
+        if (requestCode == REQUEST_SMS_PERMISSION || requestCode == REQUEST_CONTACTS_PERMISSION) {
             // check permissions again, we may need to look for more
             checkPermissions()
         }
@@ -247,6 +270,8 @@ fun MessageCard(
     message: MessageModel,
     onMessageClick: (MessageModel) -> Unit
 ) {
+    val contactName = Utils.getContactName(LocalContext.current, message.from)
+
     val title = when {
         message.locationName.isNotEmpty() -> message.locationName
         message.textList.isNotEmpty() -> message.textList.first()
@@ -256,6 +281,7 @@ fun MessageCard(
 
     val subtitle = when {
         message.lat.isNotEmpty() && message.lng.isNotEmpty() -> "${message.lat}, ${message.lng}"
+        !contactName.isNullOrEmpty() -> "From: $contactName"
         message.from.isNotEmpty() -> "From: ${message.from}"
         else -> ""
     }
