@@ -57,10 +57,10 @@ class ShareReceiverActivity : ComponentActivity() {
     private fun handleIntent(to: String) {
         if (intent.action.equals(Intent.ACTION_SEND)) {
             if (intent.type.equals("text/plain")) {
-                intent.getStringExtra(Intent.EXTRA_TEXT)?.let { clipText ->
-                    // send encoded data and map link together
-                    sendMessage(to, CommunicationUtils.encodeUrlMessage(clipText))
-                }
+                val title = intent.getStringExtra(Intent.EXTRA_TITLE)
+                val clipText = intent.getStringExtra(Intent.EXTRA_TEXT)
+                // send encoded data and map link together
+                sendMessage(to, CommunicationUtils.encodeUrlMessage(title, clipText))
             }
         } else if (intent.action.equals(Intent.ACTION_VIEW)) {
             intent.data?.let { data ->

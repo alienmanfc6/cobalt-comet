@@ -12,7 +12,10 @@ data class MessageModel(
     var locationName: String = ""
 ) {
 
-    fun addText(text: String) {
+    fun addText(text: String?) {
+        if (text.isNullOrEmpty()) {
+            return
+        }
         textList.add(text)
     }
 

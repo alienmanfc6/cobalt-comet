@@ -54,10 +54,10 @@ class CommunicationUtils {
             }
         }
 
-        fun encodeUrlMessage(text: String): String {
+        fun encodeUrlMessage(title: String?, text: String?): String {
             val message = MessageModel()
 
-            if (text.contains("\n")) {
+            if (text?.contains("\n") == true) {
                 val lineArray = text.split("\n")
                 for (i in lineArray.indices) {
                     val url = Utils.parseUrl(lineArray[i])
@@ -78,6 +78,10 @@ class CommunicationUtils {
 
             if (message.locationName.isEmpty()) {
                 message.locationName = message.textList.firstOrNull().orEmpty()
+            }
+
+            if (title?.isNotEmpty() == true) {
+                message.locationName = title
             }
 
             return buildString {
