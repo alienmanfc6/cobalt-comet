@@ -9,7 +9,9 @@ data class MessageModel(
     var url: String = "",
     var lat: String = "",
     var lng: String = "",
-    var locationName: String = ""
+    var locationName: String = "",
+    var from: String = "",
+    var receivedAt: Long = 0L
 ) {
 
     fun addText(text: String?) {
@@ -35,6 +37,8 @@ data class MessageModel(
         lat = jData.optString("lat")
         lng = jData.optString("lng")
         locationName = jData.optString("locationName")
+        from = jData.optString("from")
+        receivedAt = jData.optLong("receivedAt")
     }
 
     fun toJson(): JSONObject {
@@ -59,6 +63,12 @@ data class MessageModel(
         }
         if (locationName.isNotEmpty()) {
             jData.put("locationName", locationName)
+        }
+        if (from.isNotEmpty()) {
+            jData.put("from", from)
+        }
+        if (receivedAt > 0) {
+            jData.put("receivedAt", receivedAt)
         }
         return jData
     }

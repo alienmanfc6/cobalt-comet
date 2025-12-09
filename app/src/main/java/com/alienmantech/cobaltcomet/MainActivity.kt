@@ -11,10 +11,19 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -25,14 +34,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.alienmantech.cobaltcomet.models.MessageModel
 import com.alienmantech.cobaltcomet.ui.theme.CobaltCometTheme
+import com.alienmantech.cobaltcomet.utils.CommunicationUtils
 import com.alienmantech.cobaltcomet.utils.Utils
 
 class MainActivity : ComponentActivity() {
@@ -42,6 +52,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private var phoneNumber by mutableStateOf("")
+    private var messages by mutableStateOf(listOf<MessageModel>())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,6 +70,10 @@ class MainActivity : ComponentActivity() {
                             phoneNumber = phoneNumber,
                             onPhoneNumberChange = { updatedValue ->
                                 phoneNumber = updatedValue
+                            },
+                            messages = messages,
+                            onMessageClick = { message ->
+                                CommunicationUtils.handleMessageAction(this, message)
                             }
                         )
                     }
@@ -71,6 +86,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
 
         phoneNumber = loadPhoneNumber()
+        messages = Utils.loadMessages(this)
     }
 
     override fun onPause() {
@@ -173,31 +189,97 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun PhoneNumberScreen(
     phoneNumber: String,
-    onPhoneNumberChange: (String) -> Unit
+    onPhoneNumberChange: (String) -> Unit,
+    messages: List<MessageModel>,
+    onMessageClick: (MessageModel) -> Unit
 ) {
+    val listState = rememberLazyListState()
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(horizontal = 16.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.Top
     ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Phone Number",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            TextField(
+                value = phoneNumber,
+                onValueChange = onPhoneNumberChange,
+                modifier = Modifier.width(200.dp),
+                placeholder = { Text(text = "1112223333") },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Phone,
+                    imeAction = ImeAction.Done
+                ),
+                singleLine = true
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
         Text(
-            text = "Phone Number",
-            style = MaterialTheme.typography.bodySmall,
+            text = "Saved Messages",
+            style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(bottom = 8.dp)
         )
-        TextField(
-            value = phoneNumber,
-            onValueChange = onPhoneNumberChange,
-            modifier = Modifier.width(200.dp),
-            placeholder = { Text(text ="1112223333") },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Phone,
-                imeAction = ImeAction.Done
-            ),
-            singleLine = true
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            state = listState
+        ) {
+            items(messages) { message ->
+                MessageCard(message = message, onMessageClick = onMessageClick)
+            }
+        }
+    }
+}
+
+@Composable
+fun MessageCard(
+    message: MessageModel,
+    onMessageClick: (MessageModel) -> Unit
+) {
+    val title = when {
+        message.locationName.isNotEmpty() -> message.locationName
+        message.textList.isNotEmpty() -> message.textList.first()
+        message.url.isNotEmpty() -> message.url
+        else -> "Saved message"
+    }
+
+    val subtitle = when {
+        message.lat.isNotEmpty() && message.lng.isNotEmpty() -> "${message.lat}, ${message.lng}"
+        message.from.isNotEmpty() -> "From: ${message.from}"
+        else -> ""
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onMessageClick(message) },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(text = title, style = MaterialTheme.typography.titleMedium)
+            if (subtitle.isNotEmpty()) {
+                Text(text = subtitle, style = MaterialTheme.typography.bodyMedium)
+            }
+            if (message.url.isNotEmpty()) {
+                Text(text = message.url, style = MaterialTheme.typography.bodySmall)
+            }
+        }
     }
 }
 
@@ -205,6 +287,23 @@ fun PhoneNumberScreen(
 @Composable
 fun PhoneNumberScreenPreview() {
     MaterialTheme {
-        PhoneNumberScreen(phoneNumber = "555-1234", onPhoneNumberChange = {})
+        val mockMessages = listOf(
+            MessageModel(
+                locationName = "Coffee Shop",
+                lat = "37.7749",
+                lng = "-122.4194",
+                url = "https://maps.app.goo.gl/example"
+            ),
+            MessageModel(
+                textList = mutableListOf("Check out this place"),
+                url = "https://example.com"
+            )
+        )
+        PhoneNumberScreen(
+            phoneNumber = "555-1234",
+            onPhoneNumberChange = {},
+            messages = mockMessages,
+            onMessageClick = {}
+        )
     }
 }
