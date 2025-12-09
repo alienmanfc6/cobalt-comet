@@ -73,7 +73,7 @@ class MainActivity : ComponentActivity() {
                             },
                             messages = messages,
                             onMessageClick = { message ->
-                                CommunicationUtils.handleMessageAction(this, message)
+                                CommunicationUtils.handleMessageAction(this@MainActivity, message)
                             }
                         )
                     }
