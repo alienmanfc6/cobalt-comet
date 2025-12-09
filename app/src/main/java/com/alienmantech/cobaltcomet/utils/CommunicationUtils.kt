@@ -3,16 +3,22 @@ package com.alienmantech.cobaltcomet.utils
 import android.content.Context
 import android.telephony.SmsManager
 import android.text.TextUtils
+import android.widget.Toast
 import com.alienmantech.cobaltcomet.models.MessageModel
+import com.alienmantech.cobaltcomet.utils.Logger
 
 class CommunicationUtils {
     companion object {
         const val SMS_PREFIX = "CobaltComet"
 
-        fun sendMessage(to: String?, body: String) {
-            to?.let {
-                sendSms(it, body)
+        fun sendMessage(context: Context, to: String?, body: String): Boolean {
+            val recipient = to?.trim()
+            if (recipient.isNullOrEmpty()) {
+                Toast.makeText(context, "No phone number selected", Toast.LENGTH_SHORT).show()
+                return false
             }
+
+            return sendSms(context, recipient, body)
         }
 
         // decide if this is a message we want to try to process
@@ -24,7 +30,7 @@ class CommunicationUtils {
         fun handleIncomingMessage(context: Context, from: String, text: String) {
             Logger.logInfo("handleIncomingMessage: $text")
 
-            decodeMessage(text)?.let { message ->
+            decodeMessage(context, text)?.let { message ->
                 message.from = from
                 message.receivedAt = System.currentTimeMillis()
                 Utils.saveMessage(context, message)
@@ -111,8 +117,9 @@ class CommunicationUtils {
             return SMS_PREFIX + message.toString()
         }
 
-        fun decodeMessage(text: String): MessageModel? {
+        fun decodeMessage(context: Context, text: String): MessageModel? {
             if (TextUtils.isEmpty(text)) {
+                Toast.makeText(context, "Received empty message", Toast.LENGTH_SHORT).show()
                 return null
             }
 
@@ -126,18 +133,23 @@ class CommunicationUtils {
             val jsonPart = parts.getOrNull(0) ?: return null
             val extraUrl = parts.getOrNull(1)
 
-            val message = MessageModel()
-            message.fromJson(jsonPart)
+            return try {
+                val message = MessageModel()
+                message.fromJson(jsonPart)
 
-            if (message.url.isEmpty() && !extraUrl.isNullOrEmpty()) {
-                message.url = extraUrl
+                if (message.url.isEmpty() && !extraUrl.isNullOrEmpty()) {
+                    message.url = extraUrl
+                }
+
+                message
+            } catch (e: Exception) {
+                Toast.makeText(context, "Couldn't read shared message", Toast.LENGTH_SHORT).show()
+                null
             }
-
-            return message
         }
 
         @Synchronized
-        private fun sendSms(to: String, body: String): Boolean {
+        private fun sendSms(context: Context, to: String, body: String): Boolean {
             return try {
                 // replace any returns with \n which is a carage return for text
                 val sm = SmsManager.getDefault()
@@ -146,6 +158,7 @@ class CommunicationUtils {
                 sm.sendMultipartTextMessage(to, null, parts, null, null)
                 true
             } catch (e: Exception) {
+                Toast.makeText(context, "Message send failed", Toast.LENGTH_SHORT).show()
                 false
             }
         }
