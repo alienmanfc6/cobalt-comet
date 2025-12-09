@@ -17,6 +17,7 @@ class Utils {
         private const val PREF_FILE_NAME = "PrefFile"
         private const val PREF_PHONE_NUMBER = "phone"
         private const val PREF_MESSAGES = "messages"
+        private const val MAX_SAVED_MESSAGES = 10
 
         private const val PHONE_NUMBER_DELIM = "-"
 
@@ -58,8 +59,10 @@ class Utils {
             val existing = loadMessages(context).toMutableList()
             existing.add(0, message)
 
+            val limited = existing.take(MAX_SAVED_MESSAGES)
+
             val array = JSONArray()
-            for (item in existing) {
+            for (item in limited) {
                 array.put(item.toJson())
             }
 
