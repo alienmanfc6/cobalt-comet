@@ -115,9 +115,9 @@ class Utils {
             val endOfUrl = after.indexOf(" ")
 
             return if (endOfUrl != -1) {
-                text.substring(index, endOfUrl)
+                after.substring(0, endOfUrl)
             } else {
-                text.substring(index)
+                after
             }
         }
 
