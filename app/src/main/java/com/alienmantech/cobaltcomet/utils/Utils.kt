@@ -1,10 +1,14 @@
 package com.alienmantech.cobaltcomet.utils
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.ContactsContract
 import android.text.TextUtils
+import androidx.core.content.ContextCompat
 import com.alienmantech.cobaltcomet.models.MessageModel
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logError
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logWarn
@@ -35,6 +39,33 @@ class Utils {
             getSavePref(context).edit()
                 .putString(PREF_PHONE_NUMBER, listToCsv(phoneNumber))
                 .apply()
+        }
+
+        fun getContactName(context: Context, phoneNumber: String?): String? {
+            if (phoneNumber.isNullOrBlank()) {
+                return null
+            }
+
+            if (ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.READ_CONTACTS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                return null
+            }
+
+            val uri = ContactsContract.PhoneLookup.CONTENT_FILTER_URI
+            val lookupUri = Uri.withAppendedPath(uri, Uri.encode(phoneNumber))
+            val projection = arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME)
+
+            return context.contentResolver.query(lookupUri, projection, null, null, null)
+                ?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        cursor.getString(0)
+                    } else {
+                        null
+                    }
+                }
         }
 
         fun loadMessages(context: Context): List<MessageModel> {
