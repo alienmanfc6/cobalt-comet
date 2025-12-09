@@ -2,6 +2,7 @@ package com.alienmantech.cobaltcomet
 
 import android.content.Intent
 import android.os.Bundle
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -56,23 +57,52 @@ class ShareReceiverActivity : ComponentActivity() {
     private fun handleIntent(to: String) {
         if (intent.action.equals(Intent.ACTION_SEND)) {
             if (intent.type.equals("text/plain")) {
-                intent.getStringExtra(Intent.EXTRA_TEXT)?.let { clipText ->
-                    // send encoded data and map link together
-                    sendMessage(to, CommunicationUtils.encodeUrlMessage(clipText))
-                }
+                val title = intent.getStringExtra(Intent.EXTRA_TITLE)
+                val clipText = intent.getStringExtra(Intent.EXTRA_TEXT)
+                // send encoded data and map link together
+                sendMessage(to, CommunicationUtils.encodeUrlMessage(title, clipText))
             }
         } else if (intent.action.equals(Intent.ACTION_VIEW)) {
             intent.data?.let { data ->
                 if (data.scheme.equals("geo")) {
-                    val ssp = data.schemeSpecificPart.toString()
-                    val query = data.query.toString()
-                    val values = ssp
-                        .replace(query, "")
-                        .replace("?", "")
-                        .split(",")
-                    sendMessage(to, CommunicationUtils.encodeGeoMessage(values[0], values[1]))
+                    val (lat, lng, locationName) = parseGeoData(data)
+                    if (lat.isNotEmpty() && lng.isNotEmpty()) {
+                        sendMessage(to, CommunicationUtils.encodeGeoMessage(lat, lng, locationName))
+                    } else if (locationName.isNotEmpty()) {
+                        sendMessage(to, CommunicationUtils.encodeGeoMessage("", "", locationName))
+                    }
                 }
             }
+        }
+    }
+
+    private fun parseGeoData(data: Uri): Triple<String, String, String> {
+        val queryParameter = data.getQueryParameter("q")
+        if (!queryParameter.isNullOrBlank()) {
+            val decoded = Uri.decode(queryParameter)
+            val labelStart = decoded.indexOf("(")
+            val labelEnd = decoded.lastIndexOf(")")
+            val hasLabel = labelStart != -1 && labelEnd > labelStart
+
+            val coordinatePart = if (hasLabel) decoded.substring(0, labelStart) else decoded
+            val label = if (hasLabel) decoded.substring(labelStart + 1, labelEnd) else ""
+
+            val coords = coordinatePart.split(",")
+            if (coords.size >= 2 && coords[0].isNotBlank() && coords[1].isNotBlank()) {
+                return Triple(coords[0], coords[1], label)
+            }
+
+            if (coordinatePart.isNotBlank()) {
+                return Triple("", "", coordinatePart)
+            }
+        }
+
+        val schemeSpecificPart = data.schemeSpecificPart.substringBefore("?")
+        val values = schemeSpecificPart.split(",")
+        return if (values.size >= 2 && values[0].isNotBlank() && values[1].isNotBlank()) {
+            Triple(values[0], values[1], "")
+        } else {
+            Triple("", "", "")
         }
     }
 

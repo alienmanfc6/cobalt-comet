@@ -33,7 +33,10 @@ class Utils {
                 .apply()
         }
 
-        fun parseUrl(text: String): String? {
+        fun parseUrl(text: String?): String? {
+            if (text == null) {
+                return null
+            }
             val index = text.indexOf("http")
             if (index == -1) {
                 return null
