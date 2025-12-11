@@ -35,7 +35,8 @@
 
         <activity
             android:name=".ShareReceiverActivity"
-            android:exported="true">
+            android:exported="true"
+            android:theme="@style/Theme.CobaltComet">
 
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
