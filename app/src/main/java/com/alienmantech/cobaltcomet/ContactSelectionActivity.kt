@@ -36,8 +36,8 @@ import androidx.core.content.ContextCompat
 import com.alienmantech.cobaltcomet.models.PhoneEntry
 import com.alienmantech.cobaltcomet.ui.NoContentView
 import com.alienmantech.cobaltcomet.ui.theme.CobaltCometTheme
-import com.alienmantech.cobaltcomet.utils.Logger.Companion.logWarn
 import com.alienmantech.cobaltcomet.utils.Utils
+import com.alienmantech.cobaltcomet.utils.Logger.Companion.logWarn
 
 class ContactSelectionActivity : ComponentActivity() {
     companion object {
@@ -104,8 +104,8 @@ class ContactSelectionActivity : ComponentActivity() {
             while (cursor.moveToNext()) {
                 val name = cursor.getString(nameIndex) ?: continue
                 val number = cursor.getString(numberIndex) ?: continue
-                val cleanedNumber = number.replace("\\s".toRegex(), "")
-                if (cleanedNumber.isBlank() || !seenNumbers.add(cleanedNumber)) {
+                val cleanedNumber = Utils.normalizePhoneNumber(number)
+                if (!Utils.isValidPhoneNumber(cleanedNumber) || !seenNumbers.add(cleanedNumber)) {
                     continue
                 }
                 contacts.add(PhoneEntry(label = name, number = cleanedNumber))
@@ -188,7 +188,11 @@ private fun ContactSelectionScreen(
                     TextButton(onClick = onCancel) {
                         Text(text = "Cancel")
                     }
-                    Button(onClick = { onSave(selectedEntries.value.toList()) }) {
+                    Button(onClick = {
+                        val validSelections = selectedEntries.value
+                            .filter { Utils.isValidPhoneNumber(it.number) }
+                        onSave(validSelections)
+                    }) {
                         Text(text = "Save")
                     }
                 }
