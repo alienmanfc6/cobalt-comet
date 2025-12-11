@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
@@ -62,11 +63,12 @@ class MainActivity : ComponentActivity() {
     private val contactSelectionLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == RESULT_OK) {
-                result.data?.getStringExtra(ContactSelectionActivity.EXTRA_SELECTED_ENTRIES)?.let { json ->
-                    val selectedEntries = Utils.decodePhoneEntries(json)
-                    phoneEntries = selectedEntries
-                    savePhoneEntries(selectedEntries)
-                }
+                result.data?.getStringExtra(ContactSelectionActivity.EXTRA_SELECTED_ENTRIES)
+                    ?.let { json ->
+                        val selectedEntries = Utils.decodePhoneEntries(json)
+                        phoneEntries = selectedEntries
+                        savePhoneEntries(selectedEntries)
+                    }
             }
         }
 
@@ -126,7 +128,10 @@ class MainActivity : ComponentActivity() {
 
     private fun openContactSelection() {
         val intent = Intent(this, ContactSelectionActivity::class.java).apply {
-            putExtra(ContactSelectionActivity.EXTRA_SELECTED_ENTRIES, Utils.encodePhoneEntries(phoneEntries))
+            putExtra(
+                ContactSelectionActivity.EXTRA_SELECTED_ENTRIES,
+                Utils.encodePhoneEntries(phoneEntries)
+            )
         }
         contactSelectionLauncher.launch(intent)
     }
@@ -185,7 +190,7 @@ class MainActivity : ComponentActivity() {
             .setTitle(getString(R.string.app_name))
             .setMessage(
                 "This app needs permission to draw over other apps to show important information. " +
-                    "Open settings to grant this permission?"
+                        "Open settings to grant this permission?"
             )
             .setPositiveButton("Open Settings") { _, _ ->
                 val intent = Intent(
@@ -253,7 +258,7 @@ fun PhoneNumberScreen(
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
-                text = "Cobalt Comet",
+                text = "Uplink",
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -303,7 +308,7 @@ fun PhoneNumberScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         phoneEntries.forEachIndexed { index, entry ->
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Column(horizontalAlignment = Alignment.Start) {
                                 Text(
                                     text = entry.label,
                                     style = MaterialTheme.typography.bodyLarge,
@@ -327,10 +332,13 @@ fun PhoneNumberScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
             text = "Saved Messages",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 8.dp)
+            textAlign = TextAlign.Center,
         )
 
         if (messages.isEmpty()) {
