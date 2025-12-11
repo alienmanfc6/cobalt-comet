@@ -1,6 +1,7 @@
 package com.alienmantech.cobaltcomet
 
 import android.Manifest
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -168,11 +169,21 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestDrawOnScreenPermission() {
-        val intent = Intent(
-            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            Uri.parse("package:$packageName")
-        )
-        startActivityForResult(intent, REQUEST_DRAW_PERMISSION)
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.app_name))
+            .setMessage(
+                "This app needs permission to draw over other apps to show important information. " +
+                    "Open settings to grant this permission?"
+            )
+            .setPositiveButton("Open Settings") { _, _ ->
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+                startActivityForResult(intent, REQUEST_DRAW_PERMISSION)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun requestContactsPermission() {
