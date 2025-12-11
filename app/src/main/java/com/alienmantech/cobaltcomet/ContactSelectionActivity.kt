@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,16 +18,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -127,51 +125,66 @@ private fun ContactSelectionScreen(
     val selectedEntries = remember { mutableStateOf(initialSelection.toMutableSet()) }
 
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        topBar = {
-            TopAppBar(
-                title = { Text(text = "Select driver numbers") },
-                navigationIcon = {
-                    IconButton(onClick = onCancel) {
-                        Icon(imageVector = Icons.Filled.Close, contentDescription = "Cancel selection")
-                    }
-                },
-                actions = {
-                    TextButton(onClick = { onSave(selectedEntries.value.toList()) }) {
-                        Text(text = "Save")
-                    }
-                }
-            )
-        }
+        modifier = Modifier.fillMaxSize()
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (contacts.isEmpty()) {
-                Text(
-                    text = "No contacts with phone numbers found.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(contacts) { contact ->
-                        ContactRow(
-                            contact = contact,
-                            isSelected = selectedEntries.value.contains(contact),
-                            onToggle = { toggled ->
-                                val updated = selectedEntries.value.toMutableSet()
-                                if (updated.contains(toggled)) {
-                                    updated.remove(toggled)
-                                } else {
-                                    updated.add(toggled)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 24.dp)
+                    .padding(bottom = 96.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                if (contacts.isEmpty()) {
+                    Text(
+                        text = "No contacts with phone numbers found.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(contacts) { contact ->
+                            ContactRow(
+                                contact = contact,
+                                isSelected = selectedEntries.value.contains(contact),
+                                onToggle = { toggled ->
+                                    val updated = selectedEntries.value.toMutableSet()
+                                    if (updated.contains(toggled)) {
+                                        updated.remove(toggled)
+                                    } else {
+                                        updated.add(toggled)
+                                    }
+                                    selectedEntries.value = updated
                                 }
-                                selectedEntries.value = updated
-                            }
-                        )
+                            )
+                        }
+                    }
+                }
+            }
+
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 24.dp),
+                tonalElevation = 6.dp,
+                shadowElevation = 6.dp
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onCancel) {
+                        Text(text = "Cancel")
+                    }
+                    Button(onClick = { onSave(selectedEntries.value.toList()) }) {
+                        Text(text = "Save")
                     }
                 }
             }
