@@ -7,22 +7,28 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.runtime.Composable
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -148,16 +154,20 @@ private fun ShareReceiverBottomSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState
-    ) {
-        ShareReceiverSheetContent(
-            phoneNumbers = phoneNumbers,
-            showYelpError = showYelpError,
-            onSelectNumber = onSelectNumber,
-            onDismiss = onDismiss
-        )
+    Box(modifier = Modifier.fillMaxSize()) {
+        ShareReceiverBackground()
+
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState
+        ) {
+            ShareReceiverSheetContent(
+                phoneNumbers = phoneNumbers,
+                showYelpError = showYelpError,
+                onSelectNumber = onSelectNumber,
+                onDismiss = onDismiss
+            )
+        }
     }
 }
 
@@ -226,6 +236,31 @@ private fun PhoneNumberRow(
     ) {
         Text(text = entry.label, style = MaterialTheme.typography.bodyLarge)
         Text(text = entry.number, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun ShareReceiverBackground() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Image(
+            painter = painterResource(id = R.mipmap.ic_launcher),
+            contentDescription = null,
+            modifier = Modifier
+                .size(96.dp)
+                .padding(bottom = 16.dp)
+        )
+
+        Text(
+            text = stringResource(id = R.string.app_name),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
