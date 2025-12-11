@@ -72,6 +72,10 @@
 
         </activity>
 
+        <activity
+            android:name=".ContactSelectionActivity"
+            android:exported="false" />
+
         <receiver
             android:name=".receivers.SmsReceiver"
             android:exported="true"

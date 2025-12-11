@@ -8,6 +8,8 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,18 +18,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,13 +34,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.alienmantech.cobaltcomet.models.MessageModel
+import com.alienmantech.cobaltcomet.models.PhoneEntry
 import com.alienmantech.cobaltcomet.ui.theme.CobaltCometTheme
 import com.alienmantech.cobaltcomet.utils.CommunicationUtils
 import com.alienmantech.cobaltcomet.utils.Utils
@@ -53,8 +51,19 @@ class MainActivity : ComponentActivity() {
         private const val REQUEST_CONTACTS_PERMISSION = 3
     }
 
-    private var phoneNumber by mutableStateOf("")
+    private var phoneEntries by mutableStateOf(listOf<PhoneEntry>())
     private var messages by mutableStateOf(listOf<MessageModel>())
+
+    private val contactSelectionLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                result.data?.getStringExtra(ContactSelectionActivity.EXTRA_SELECTED_ENTRIES)?.let { json ->
+                    val selectedEntries = Utils.decodePhoneEntries(json)
+                    phoneEntries = selectedEntries
+                    savePhoneEntries(selectedEntries)
+                }
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,10 +78,8 @@ class MainActivity : ComponentActivity() {
                             .fillMaxSize()
                     ) {
                         PhoneNumberScreen(
-                            phoneNumber = phoneNumber,
-                            onPhoneNumberChange = { updatedValue ->
-                                phoneNumber = updatedValue
-                            },
+                            phoneEntries = phoneEntries,
+                            onManageNumbers = { openContactSelection() },
                             messages = messages,
                             onMessageClick = { message ->
                                 CommunicationUtils.handleMessageAction(this@MainActivity, message)
@@ -87,14 +94,14 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
 
-        phoneNumber = loadPhoneNumber()
+        phoneEntries = Utils.loadPhoneNumbers(this)
         messages = Utils.loadMessages(this)
     }
 
     override fun onPause() {
         super.onPause()
 
-        savePhoneNumber(phoneNumber)
+        savePhoneEntries(phoneEntries)
     }
 
     private fun ensureSmsPermissionOnStart() {
@@ -107,14 +114,15 @@ class MainActivity : ComponentActivity() {
         checkPermissions()
     }
 
-    private fun loadPhoneNumber(): String {
-        return Utils.loadPhoneNumbers(this)?.let {
-            Utils.listToCsv(it)
-        } ?: ""
+    private fun savePhoneEntries(entries: List<PhoneEntry>) {
+        Utils.savePhoneNumbers(this, entries)
     }
 
-    private fun savePhoneNumber(phoneNumber: String) {
-        Utils.savePhoneNumbers(this, Utils.csvToList(phoneNumber))
+    private fun openContactSelection() {
+        val intent = Intent(this, ContactSelectionActivity::class.java).apply {
+            putExtra(ContactSelectionActivity.EXTRA_SELECTED_ENTRIES, Utils.encodePhoneEntries(phoneEntries))
+        }
+        contactSelectionLauncher.launch(intent)
     }
 
     private fun checkPermissions() {
@@ -211,8 +219,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun PhoneNumberScreen(
-    phoneNumber: String,
-    onPhoneNumberChange: (String) -> Unit,
+    phoneEntries: List<PhoneEntry>,
+    onManageNumbers: () -> Unit,
     messages: List<MessageModel>,
     onMessageClick: (MessageModel) -> Unit
 ) {
@@ -228,21 +236,31 @@ fun PhoneNumberScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Phone Number",
+                text = "Driver phone numbers",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
-            TextField(
-                value = phoneNumber,
-                onValueChange = onPhoneNumberChange,
-                modifier = Modifier.width(200.dp),
-                placeholder = { Text(text = "1112223333") },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Phone,
-                    imeAction = ImeAction.Done
-                ),
-                singleLine = true
-            )
+            Button(onClick = onManageNumbers) {
+                Text(text = "Select from contacts")
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (phoneEntries.isEmpty()) {
+                Text(
+                    text = "No driver numbers selected.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    phoneEntries.forEach { entry ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = entry.label, style = MaterialTheme.typography.bodyLarge)
+                            Text(text = entry.number, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -326,8 +344,11 @@ fun PhoneNumberScreenPreview() {
             )
         )
         PhoneNumberScreen(
-            phoneNumber = "555-1234",
-            onPhoneNumberChange = {},
+            phoneEntries = listOf(
+                PhoneEntry(label = "Driver One", number = "555-1234"),
+                PhoneEntry(label = "Driver Two", number = "555-5678")
+            ),
+            onManageNumbers = {},
             messages = mockMessages,
             onMessageClick = {}
         )

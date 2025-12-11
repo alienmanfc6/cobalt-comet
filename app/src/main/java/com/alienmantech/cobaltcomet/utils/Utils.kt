@@ -10,6 +10,7 @@ import android.provider.ContactsContract
 import android.text.TextUtils
 import androidx.core.content.ContextCompat
 import com.alienmantech.cobaltcomet.models.MessageModel
+import com.alienmantech.cobaltcomet.models.PhoneEntry
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logError
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logWarn
 import java.util.Locale
@@ -29,16 +30,47 @@ class Utils {
             return context.getSharedPreferences(PREF_FILE_NAME, Context.MODE_PRIVATE);
         }
 
-        fun loadPhoneNumbers(context: Context): List<String>? {
-            return getSavePref(context).getString(PREF_PHONE_NUMBER, null)?.let {
-                csvToList(it)
-            }
+        fun loadPhoneNumbers(context: Context): List<PhoneEntry> {
+            return decodePhoneEntries(getSavePref(context).getString(PREF_PHONE_NUMBER, null))
         }
 
-        fun savePhoneNumbers(context: Context, phoneNumber: List<String>) {
+        fun savePhoneNumbers(context: Context, phoneNumber: List<PhoneEntry>) {
             getSavePref(context).edit()
-                .putString(PREF_PHONE_NUMBER, listToCsv(phoneNumber))
+                .putString(PREF_PHONE_NUMBER, encodePhoneEntries(phoneNumber))
                 .apply()
+        }
+
+        fun encodePhoneEntries(entries: List<PhoneEntry>): String {
+            val array = JSONArray()
+            for (entry in entries) {
+                array.put(entry.toJson())
+            }
+            return array.toString()
+        }
+
+        fun decodePhoneEntries(raw: String?): List<PhoneEntry> {
+            if (raw.isNullOrBlank()) {
+                return emptyList()
+            }
+
+            try {
+                val parsed = mutableListOf<PhoneEntry>()
+                val array = JSONArray(raw)
+                for (i in 0 until array.length()) {
+                    val jsonObject = array.optJSONObject(i) ?: continue
+                    PhoneEntry.fromJson(jsonObject)?.let { parsed.add(it) }
+                }
+                if (parsed.isNotEmpty()) {
+                    return parsed
+                }
+            } catch (e: Exception) {
+                logWarn("Unable to decode saved phone entries; falling back to legacy format")
+            }
+
+            // Fallback for legacy CSV data.
+            return csvToList(raw).map { number ->
+                PhoneEntry(label = number, number = number)
+            }
         }
 
         fun getContactName(context: Context, phoneNumber: String?): String? {

@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.alienmantech.cobaltcomet.models.PhoneEntry
 import com.alienmantech.cobaltcomet.ui.theme.CobaltCometTheme
 import com.alienmantech.cobaltcomet.utils.CommunicationUtils
 import com.alienmantech.cobaltcomet.utils.Utils
@@ -32,10 +33,10 @@ class ShareReceiverActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val phoneNumbers = Utils.loadPhoneNumbers(this).orEmpty()
+        val phoneNumbers = Utils.loadPhoneNumbers(this)
 
         if (phoneNumbers.size == 1) {
-            handleIntent(phoneNumbers.first())
+            handleIntent(phoneNumbers.first().number)
             finish()
             return
         }
@@ -46,7 +47,7 @@ class ShareReceiverActivity : ComponentActivity() {
                     phoneNumbers = phoneNumbers,
                     showYelpError = shouldShowYelpErrorMessage,
                     onSelectNumber = { selectedNumber ->
-                        handleIntent(selectedNumber)
+                        handleIntent(selectedNumber.number)
                         finish()
                     }
                 )
@@ -135,9 +136,9 @@ class ShareReceiverActivity : ComponentActivity() {
 
 @Composable
 private fun ShareReceiverScreen(
-    phoneNumbers: List<String>,
+    phoneNumbers: List<PhoneEntry>,
     showYelpError: Boolean,
-    onSelectNumber: (String) -> Unit
+    onSelectNumber: (PhoneEntry) -> Unit
 ) {
     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
         Column(
@@ -174,8 +175,8 @@ private fun ShareReceiverScreen(
                         .weight(1f, fill = false),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(phoneNumbers) { number ->
-                        PhoneNumberRow(number = number, onSelectNumber = onSelectNumber)
+                    items(phoneNumbers) { entry ->
+                        PhoneNumberRow(entry = entry, onSelectNumber = onSelectNumber)
                     }
                 }
             }
@@ -185,17 +186,18 @@ private fun ShareReceiverScreen(
 
 @Composable
 private fun PhoneNumberRow(
-    number: String,
-    onSelectNumber: (String) -> Unit
+    entry: PhoneEntry,
+    onSelectNumber: (PhoneEntry) -> Unit
 ) {
-    Text(
-        text = number,
-        style = MaterialTheme.typography.bodyLarge,
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onSelectNumber(number) }
+            .clickable { onSelectNumber(entry) }
             .padding(vertical = 12.dp, horizontal = 8.dp)
-    )
+    ) {
+        Text(text = entry.label, style = MaterialTheme.typography.bodyLarge)
+        Text(text = entry.number, style = MaterialTheme.typography.bodyMedium)
+    }
 }
 
 @Preview(showBackground = true)
@@ -203,7 +205,10 @@ private fun PhoneNumberRow(
 private fun ShareReceiverScreenPreview() {
     CobaltCometTheme {
         ShareReceiverScreen(
-            phoneNumbers = listOf("555-0101", "555-0102"),
+            phoneNumbers = listOf(
+                PhoneEntry(label = "Driver One", number = "555-0101"),
+                PhoneEntry(label = "Driver Two", number = "555-0102"),
+            ),
             showYelpError = true,
             onSelectNumber = {}
         )
