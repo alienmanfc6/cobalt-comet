@@ -11,6 +11,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +27,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -79,6 +81,7 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier
                             .padding(innerPadding)
                             .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background)
                     ) {
                         PhoneNumberScreen(
                             phoneEntries = phoneEntries,
@@ -240,15 +243,43 @@ fun PhoneNumberScreen(
         verticalArrangement = Arrangement.Top
     ) {
         Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                    shape = MaterialTheme.shapes.medium
+                )
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = "Cobalt Comet",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = "Guided dispatch with a cosmic glow.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = "Driver phone numbers",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
-            Button(onClick = onManageNumbers) {
+            Button(
+                onClick = onManageNumbers,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Text(text = "Select from contacts")
             }
 
@@ -257,14 +288,36 @@ fun PhoneNumberScreen(
             if (phoneEntries.isEmpty()) {
                 Text(
                     text = "No driver numbers selected.",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    phoneEntries.forEach { entry ->
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(text = entry.label, style = MaterialTheme.typography.bodyLarge)
-                            Text(text = entry.number, style = MaterialTheme.typography.bodyMedium)
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        phoneEntries.forEachIndexed { index, entry ->
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = entry.label,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = entry.number,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            if (index != phoneEntries.lastIndex) {
+                                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+                            }
                         }
                     }
                 }
@@ -276,6 +329,7 @@ fun PhoneNumberScreen(
         Text(
             text = "Saved Messages",
             style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
@@ -329,8 +383,10 @@ fun MessageCard(
             .fillMaxWidth()
             .clickable { onMessageClick(message) },
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        border = CardDefaults.outlinedCardBorder()
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -338,10 +394,18 @@ fun MessageCard(
         ) {
             Text(text = title, style = MaterialTheme.typography.titleMedium)
             if (subtitle.isNotEmpty()) {
-                Text(text = subtitle, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             if (message.url.isNotEmpty()) {
-                Text(text = message.url, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    text = message.url,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
         }
     }
@@ -350,7 +414,7 @@ fun MessageCard(
 @Preview(showBackground = true)
 @Composable
 fun PhoneNumberScreenPreview() {
-    MaterialTheme {
+    CobaltCometTheme {
         val mockMessages = listOf(
             MessageModel(
                 locationName = "Coffee Shop",
