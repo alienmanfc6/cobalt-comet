@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.ContactsContract
 import android.text.TextUtils
+import android.util.Patterns
 import androidx.core.content.ContextCompat
 import com.alienmantech.cobaltcomet.models.MessageModel
 import com.alienmantech.cobaltcomet.models.PhoneEntry
@@ -333,6 +334,18 @@ class Utils {
                 sb.append(item)
             }
             return sb.toString()
+        }
+
+        fun normalizePhoneNumber(rawNumber: String): String {
+            return rawNumber.replace("\\s".toRegex(), "")
+        }
+
+        fun isValidPhoneNumber(rawNumber: String): Boolean {
+            if (rawNumber.isBlank()) {
+                return false
+            }
+
+            return Patterns.PHONE.matcher(rawNumber).matches()
         }
     }
 }
