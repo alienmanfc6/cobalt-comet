@@ -266,7 +266,8 @@ private fun ShareReceiverBackground() {
         Text(
             text = stringResource(id = R.string.app_name),
             style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
         )
     }
 }
