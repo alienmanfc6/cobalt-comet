@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.alienmantech.cobaltcomet.models.PhoneEntry
+import com.alienmantech.cobaltcomet.ui.NoContentView
 import com.alienmantech.cobaltcomet.ui.theme.CobaltCometTheme
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logWarn
 import com.alienmantech.cobaltcomet.utils.Utils
@@ -140,12 +141,16 @@ private fun ContactSelectionScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 if (contacts.isEmpty()) {
-                    Text(
-                        text = "No contacts with phone numbers found.",
-                        style = MaterialTheme.typography.bodyMedium
+                    NoContentView(
+                        title = "No contacts found",
+                        description = "Contacts with phone numbers will appear here when available.",
+                        modifier = Modifier.weight(1f, fill = true)
                     )
                 } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f, fill = true)
+                    ) {
                         items(contacts) { contact ->
                             ContactRow(
                                 contact = contact,
