@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -42,6 +43,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.alienmantech.cobaltcomet.models.MessageModel
 import com.alienmantech.cobaltcomet.models.PhoneEntry
+import com.alienmantech.cobaltcomet.ui.NoContentView
 import com.alienmantech.cobaltcomet.ui.theme.CobaltCometTheme
 import com.alienmantech.cobaltcomet.utils.CommunicationUtils
 import com.alienmantech.cobaltcomet.utils.Utils
@@ -278,13 +280,25 @@ fun PhoneNumberScreen(
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            state = listState
-        ) {
-            items(messages) { message ->
-                MessageCard(message = message, onMessageClick = onMessageClick)
+        if (messages.isEmpty()) {
+            NoContentView(
+                title = "No saved messages",
+                description = "Messages you save will show up here for quick access.",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = true)
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = true),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                state = listState
+            ) {
+                items(messages) { message ->
+                    MessageCard(message = message, onMessageClick = onMessageClick)
+                }
             }
         }
     }
