@@ -17,11 +17,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -121,7 +126,24 @@ private fun ContactSelectionScreen(
 ) {
     val selectedEntries = remember { mutableStateOf(initialSelection.toMutableSet()) }
 
-    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = { Text(text = "Select driver numbers") },
+                navigationIcon = {
+                    IconButton(onClick = onCancel) {
+                        Icon(imageVector = Icons.Filled.Close, contentDescription = "Cancel selection")
+                    }
+                },
+                actions = {
+                    TextButton(onClick = { onSave(selectedEntries.value.toList()) }) {
+                        Text(text = "Save")
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
         Column(
             modifier = Modifier
                 .padding(innerPadding)
@@ -129,11 +151,6 @@ private fun ContactSelectionScreen(
                 .padding(horizontal = 16.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(
-                text = "Select driver numbers",
-                style = MaterialTheme.typography.titleMedium
-            )
-
             if (contacts.isEmpty()) {
                 Text(
                     text = "No contacts with phone numbers found.",
@@ -156,18 +173,6 @@ private fun ContactSelectionScreen(
                             }
                         )
                     }
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Button(onClick = onCancel, modifier = Modifier.weight(1f)) {
-                    Text(text = "Cancel")
-                }
-                Button(onClick = { onSave(selectedEntries.value.toList()) }, modifier = Modifier.weight(1f)) {
-                    Text(text = "Save")
                 }
             }
         }
