@@ -249,7 +249,7 @@ private fun ShareReceiverBackground() {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Image(
-            painter = painterResource(id = R.mipmap.ic_launcher),
+            painter = painterResource(id = R.mipmap.ic_launcher_foreground),
             contentDescription = null,
             modifier = Modifier
                 .size(96.dp)
