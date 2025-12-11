@@ -258,7 +258,7 @@ fun PhoneNumberScreen(
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                text = "Guided dispatch with a cosmic glow.",
+                text = "Your dispatch co-pilot with a cosmic glow.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onBackground
             )
