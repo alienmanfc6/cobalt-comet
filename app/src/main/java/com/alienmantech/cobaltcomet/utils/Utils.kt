@@ -23,7 +23,7 @@ class Utils {
         private const val PREF_FILE_NAME = "PrefFile"
         private const val PREF_PHONE_NUMBER = "phone"
         private const val PREF_MESSAGES = "messages"
-        private const val MAX_SAVED_MESSAGES = 10
+        private const val MAX_SAVED_MESSAGES = 30
 
         private const val PHONE_NUMBER_DELIM = "-"
 
