@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationCompat
+import android.widget.Toast
 import com.alienmantech.cobaltcomet.R
 import com.alienmantech.cobaltcomet.utils.BluetoothCommunicationTransport
 import com.alienmantech.cobaltcomet.utils.CommunicationUtils
@@ -76,12 +77,14 @@ class BluetoothMessageService : Service() {
         val adapter = BluetoothAdapter.getDefaultAdapter()
         if (adapter == null || !adapter.isEnabled) {
             Logger.logInfo("Bluetooth adapter unavailable; cannot send message")
+            Toast.makeText(applicationContext, "Bluetooth is unavailable", Toast.LENGTH_SHORT).show()
             return
         }
 
         val device = adapter.getRemoteDevice(address)
         if (!ensureBonded(device)) {
             Logger.logError("Unable to bond with $address", Exception("Bonding failed"))
+            Toast.makeText(applicationContext, "Failed to connect to paired device", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -93,6 +96,7 @@ class BluetoothMessageService : Service() {
             startListening(socket, device)
         } catch (e: Exception) {
             Logger.logError("Bluetooth write failed", e)
+            Toast.makeText(applicationContext, "Bluetooth send failed", Toast.LENGTH_SHORT).show()
             closeSocket()
         }
     }
@@ -103,18 +107,27 @@ class BluetoothMessageService : Service() {
             return true
         }
 
-        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return false
+        val adapter = BluetoothAdapter.getDefaultAdapter()
+        if (adapter == null) {
+            Toast.makeText(applicationContext, "Bluetooth is unavailable", Toast.LENGTH_SHORT).show()
+            return false
+        }
         adapter.startDiscovery()
         return try {
             device.createBond()
         } catch (e: Exception) {
             Logger.logError("Bonding failed", e)
+            Toast.makeText(applicationContext, "Pairing with device failed", Toast.LENGTH_SHORT).show()
             false
         }
     }
 
     private suspend fun ensureBonded(address: String): Boolean {
-        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return false
+        val adapter = BluetoothAdapter.getDefaultAdapter()
+        if (adapter == null) {
+            Toast.makeText(applicationContext, "Bluetooth is unavailable", Toast.LENGTH_SHORT).show()
+            return false
+        }
         val device = adapter.getRemoteDevice(address)
         return ensureBonded(device)
     }
@@ -143,6 +156,7 @@ class BluetoothMessageService : Service() {
             socket
         } catch (e: Exception) {
             Logger.logError("Bluetooth socket connection failed", e)
+            Toast.makeText(applicationContext, "Could not connect to Bluetooth device", Toast.LENGTH_SHORT).show()
             closeSocket()
             null
         }

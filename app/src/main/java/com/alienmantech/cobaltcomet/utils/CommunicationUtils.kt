@@ -14,13 +14,12 @@ class CommunicationUtils {
 
         fun sendMessage(context: Context, to: String?, body: String): Boolean {
             val recipient = to?.trim()
-            if (recipient.isNullOrEmpty()) {
-                Toast.makeText(context, "No recipient selected", Toast.LENGTH_SHORT).show()
+            if (!TransportPreflight.validateBase(context, recipient, body)) {
                 return false
             }
 
             val dispatcher = TransportDispatcher(loadTransportConfig(context))
-            return dispatcher.dispatch(context, recipient, body)
+            return dispatcher.dispatch(context, recipient.orEmpty(), body)
         }
 
         // decide if this is a message we want to try to process
