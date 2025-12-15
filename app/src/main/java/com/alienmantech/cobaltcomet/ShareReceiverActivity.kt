@@ -1,8 +1,13 @@
 package com.alienmantech.cobaltcomet
 
+import android.Manifest
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.content.Intent
-import android.os.Bundle
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -33,6 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.alienmantech.cobaltcomet.models.ContactType
 import com.alienmantech.cobaltcomet.models.PhoneEntry
 import com.alienmantech.cobaltcomet.ui.theme.CobaltCometTheme
@@ -44,7 +50,7 @@ class ShareReceiverActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val phoneNumbers = Utils.loadPhoneNumbers(this)
+        val phoneNumbers = loadShareTargets()
 
         if (phoneNumbers.size == 1) {
             handleIntent(phoneNumbers.first())
@@ -143,6 +149,55 @@ class ShareReceiverActivity : ComponentActivity() {
 
     private fun showErrorMessage(message: String) {
         //TODO: show error message
+    }
+
+    private fun loadShareTargets(): List<PhoneEntry> {
+        val savedEntries = Utils.loadPhoneNumbers(this).toMutableList()
+        val existingNumbers = savedEntries.map { it.number }.toMutableSet()
+
+        val adapter = BluetoothAdapter.getDefaultAdapter()
+        val hasBluetoothPermission = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.BLUETOOTH_CONNECT
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (adapter != null && hasBluetoothPermission) {
+            val connectedAddresses = getConnectedBluetoothAddresses()
+
+            adapter.bondedDevices.forEach { device ->
+                val address = device.address ?: return@forEach
+                if (connectedAddresses.contains(address) && !existingNumbers.contains(address)) {
+                    val label = device.name?.takeIf { it.isNotBlank() } ?: "Bluetooth device"
+                    savedEntries.add(
+                        PhoneEntry(
+                            label = label,
+                            number = address,
+                            type = ContactType.BLUETOOTH
+                        )
+                    )
+                    existingNumbers.add(address)
+                }
+            }
+        }
+
+        return savedEntries
+    }
+
+    private fun getConnectedBluetoothAddresses(): Set<String> {
+        val bluetoothManager = getSystemService(BluetoothManager::class.java) ?: return emptySet()
+        val connected = mutableSetOf<String>()
+        listOf(
+            BluetoothProfile.GATT,
+            BluetoothProfile.A2DP,
+            BluetoothProfile.HEADSET,
+            BluetoothProfile.HEARING_AID
+        ).forEach { profile ->
+            runCatching { bluetoothManager.getConnectedDevices(profile) }.getOrDefault(emptyList())
+                .forEach { device ->
+                    device.address?.let { connected.add(it) }
+                }
+        }
+        return connected
     }
 }
 
