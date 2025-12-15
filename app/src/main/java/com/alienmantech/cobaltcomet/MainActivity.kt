@@ -26,6 +26,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -35,10 +38,13 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Divider
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,7 +53,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
@@ -61,6 +66,12 @@ import com.alienmantech.cobaltcomet.utils.TransportConfig
 import com.alienmantech.cobaltcomet.utils.TransportMode
 import com.alienmantech.cobaltcomet.utils.TransportType
 import com.alienmantech.cobaltcomet.utils.Utils
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+
+private const val MainRoute = "main"
+private const val SetupRoute = "setup"
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -92,6 +103,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             CobaltCometTheme {
+                val navController = rememberNavController()
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Box(
                         modifier = Modifier
@@ -99,24 +111,44 @@ class MainActivity : ComponentActivity() {
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background)
                     ) {
-                        PhoneNumberScreen(
-                            phoneEntries = phoneEntries,
-                            onManageNumbers = { openContactSelection() },
-                            messages = messages,
-                            onMessageClick = { message ->
-                                CommunicationUtils.handleMessageAction(this@MainActivity, message)
-                            },
-                            transportConfig = transportConfig,
-                            bluetoothStatus = bluetoothStatus,
-                            onTransportModeChanged = { mode ->
-                                transportConfig = transportConfig.copy(mode = mode)
-                                CommunicationUtils.saveTransportConfig(this@MainActivity, transportConfig)
-                            },
-                            onFallbackChanged = { fallback ->
-                                transportConfig = transportConfig.copy(fallback = fallback)
-                                CommunicationUtils.saveTransportConfig(this@MainActivity, transportConfig)
+                        NavHost(
+                            navController = navController,
+                            startDestination = MainRoute,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            composable(MainRoute) {
+                                MessageHistoryScreen(
+                                    messages = messages,
+                                    onMessageClick = { message ->
+                                        CommunicationUtils.handleMessageAction(this@MainActivity, message)
+                                    },
+                                    onSettingsClick = { navController.navigate(SetupRoute) }
+                                )
                             }
-                        )
+                            composable(SetupRoute) {
+                                SetupScreen(
+                                    phoneEntries = phoneEntries,
+                                    onManageNumbers = { openContactSelection() },
+                                    transportConfig = transportConfig,
+                                    bluetoothStatus = bluetoothStatus,
+                                    onTransportModeChanged = { mode ->
+                                        transportConfig = transportConfig.copy(mode = mode)
+                                        CommunicationUtils.saveTransportConfig(
+                                            this@MainActivity,
+                                            transportConfig
+                                        )
+                                    },
+                                    onFallbackChanged = { fallback ->
+                                        transportConfig = transportConfig.copy(fallback = fallback)
+                                        CommunicationUtils.saveTransportConfig(
+                                            this@MainActivity,
+                                            transportConfig
+                                        )
+                                    },
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -275,144 +307,175 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun PhoneNumberScreen(
+fun SetupScreen(
     phoneEntries: List<PhoneEntry>,
     onManageNumbers: () -> Unit,
-    messages: List<MessageModel>,
-    onMessageClick: (MessageModel) -> Unit,
     transportConfig: TransportConfig,
     bluetoothStatus: BluetoothStatus,
     onTransportModeChanged: (TransportMode) -> Unit,
-    onFallbackChanged: (TransportType?) -> Unit
+    onFallbackChanged: (TransportType?) -> Unit,
+    onBack: () -> Unit
 ) {
-    val listState = rememberLazyListState()
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.Top
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-                    shape = MaterialTheme.shapes.medium
-                )
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text(
-                text = "Uplink",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = "Your dispatch co-pilot with a cosmic glow.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(text = "Setup") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                }
             )
         }
-
-        Spacer(modifier = Modifier.height(18.dp))
-
-        TransportControls(
-            transportConfig = transportConfig,
-            bluetoothStatus = bluetoothStatus,
-            onTransportModeChanged = onTransportModeChanged,
-            onFallbackChanged = onFallbackChanged
-        )
-
-        Spacer(modifier = Modifier.height(18.dp))
-
+    ) { innerPadding ->
         Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            Text(
-                text = "Driver phone numbers",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            Button(
-                onClick = onManageNumbers,
-                modifier = Modifier.fillMaxWidth()
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                        shape = MaterialTheme.shapes.medium
+                    )
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Text(text = "Select from contacts")
+                Text(
+                    text = "Uplink",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Your dispatch co-pilot with a cosmic glow.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            TransportControls(
+                transportConfig = transportConfig,
+                bluetoothStatus = bluetoothStatus,
+                onTransportModeChanged = onTransportModeChanged,
+                onFallbackChanged = onFallbackChanged
+            )
 
-            if (phoneEntries.isEmpty()) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(
-                    text = "No driver numbers selected.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = "Driver phone numbers",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
-            } else {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    ),
+                Button(
+                    onClick = onManageNumbers,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Text(text = "Select from contacts")
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (phoneEntries.isEmpty()) {
+                    Text(
+                        text = "No driver numbers selected.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        phoneEntries.forEachIndexed { index, entry ->
-                            Column(horizontalAlignment = Alignment.Start) {
-                                Text(
-                                    text = entry.label,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = entry.number,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            if (index != phoneEntries.lastIndex) {
-                                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            phoneEntries.forEachIndexed { index, entry ->
+                                Column(horizontalAlignment = Alignment.Start) {
+                                    Text(
+                                        text = entry.label,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = entry.number,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                if (index != phoneEntries.lastIndex) {
+                                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+                                }
                             }
                         }
                     }
                 }
             }
         }
+    }
+}
 
-        Spacer(modifier = Modifier.height(24.dp))
+@Composable
+fun MessageHistoryScreen(
+    messages: List<MessageModel>,
+    onMessageClick: (MessageModel) -> Unit,
+    onSettingsClick: () -> Unit
+) {
+    val listState = rememberLazyListState()
 
-        Text(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            text = "Saved Messages",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center,
-        )
-
-        if (messages.isEmpty()) {
-            NoContentView(
-                title = "No saved messages",
-                description = "Messages you save will show up here for quick access.",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = true)
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(text = "Saved Messages") },
+                actions = {
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = "Setup"
+                        )
+                    }
+                }
             )
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = true),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                state = listState
-            ) {
-                items(messages) { message ->
-                    MessageCard(message = message, onMessageClick = onMessageClick)
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            if (messages.isEmpty()) {
+                NoContentView(
+                    title = "No saved messages",
+                    description = "Messages you save will show up here for quick access.",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = true)
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = true),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    state = listState
+                ) {
+                    items(messages) { message ->
+                        MessageCard(message = message, onMessageClick = onMessageClick)
+                    }
                 }
             }
         }
@@ -685,7 +748,31 @@ fun MessageCard(
 
 @Preview(showBackground = true)
 @Composable
-fun PhoneNumberScreenPreview() {
+fun SetupScreenPreview() {
+    CobaltCometTheme {
+        SetupScreen(
+            phoneEntries = listOf(
+                PhoneEntry(label = "Driver One", number = "555-1234"),
+                PhoneEntry(label = "Driver Two", number = "555-5678")
+            ),
+            onManageNumbers = {},
+            transportConfig = TransportConfig(mode = TransportMode.AUTO, fallback = TransportType.SMS),
+            bluetoothStatus = BluetoothStatus(
+                supported = true,
+                enabled = true,
+                pairedDeviceName = "Truck Radio",
+                pairedDeviceAddress = "00:11:22:33:44:55"
+            ),
+            onTransportModeChanged = {},
+            onFallbackChanged = {},
+            onBack = {}
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun MessageHistoryScreenPreview() {
     CobaltCometTheme {
         val mockMessages = listOf(
             MessageModel(
@@ -699,23 +786,10 @@ fun PhoneNumberScreenPreview() {
                 url = "https://example.com"
             )
         )
-        PhoneNumberScreen(
-            phoneEntries = listOf(
-                PhoneEntry(label = "Driver One", number = "555-1234"),
-                PhoneEntry(label = "Driver Two", number = "555-5678")
-            ),
-            onManageNumbers = {},
+        MessageHistoryScreen(
             messages = mockMessages,
             onMessageClick = {},
-            transportConfig = TransportConfig(mode = TransportMode.AUTO, fallback = TransportType.SMS),
-            bluetoothStatus = BluetoothStatus(
-                supported = true,
-                enabled = true,
-                pairedDeviceName = "Truck Radio",
-                pairedDeviceAddress = "00:11:22:33:44:55"
-            ),
-            onTransportModeChanged = {},
-            onFallbackChanged = {}
+            onSettingsClick = {}
         )
     }
 }
