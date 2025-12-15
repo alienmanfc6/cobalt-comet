@@ -1,7 +1,6 @@
 package com.alienmantech.cobaltcomet.utils
 
 import android.content.Context
-import android.telephony.SmsManager
 import android.text.TextUtils
 import android.widget.Toast
 import com.alienmantech.cobaltcomet.models.MessageModel
@@ -10,15 +9,18 @@ import com.alienmantech.cobaltcomet.utils.Logger
 class CommunicationUtils {
     companion object {
         const val SMS_PREFIX = "CobaltComet"
+        private const val PREF_TRANSPORT_MODE = "transport_mode"
+        private const val PREF_FALLBACK_TRANSPORT = "transport_fallback"
 
         fun sendMessage(context: Context, to: String?, body: String): Boolean {
             val recipient = to?.trim()
             if (recipient.isNullOrEmpty()) {
-                Toast.makeText(context, "No phone number selected", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "No recipient selected", Toast.LENGTH_SHORT).show()
                 return false
             }
 
-            return sendSms(context, recipient, body)
+            val dispatcher = TransportDispatcher(loadTransportConfig(context))
+            return dispatcher.dispatch(context, recipient, body)
         }
 
         // decide if this is a message we want to try to process
@@ -148,19 +150,27 @@ class CommunicationUtils {
             }
         }
 
-        @Synchronized
-        private fun sendSms(context: Context, to: String, body: String): Boolean {
-            return try {
-                // replace any returns with \n which is a carage return for text
-                val sm = SmsManager.getDefault()
-                //sm.sendTextMessage(to, null, body, null, null);
-                val parts = sm.divideMessage(body)
-                sm.sendMultipartTextMessage(to, null, parts, null, null)
-                true
-            } catch (e: Exception) {
-                Toast.makeText(context, "Message send failed", Toast.LENGTH_SHORT).show()
-                false
-            }
+        fun saveTransportConfig(context: Context, config: TransportConfig) {
+            val prefs = Utils.getSavePref(context)
+            prefs.edit()
+                .putString(PREF_TRANSPORT_MODE, config.mode.name)
+                .putString(PREF_FALLBACK_TRANSPORT, config.fallback?.name)
+                .apply()
+        }
+
+        fun loadTransportConfig(context: Context): TransportConfig {
+            val prefs = Utils.getSavePref(context)
+            val mode = prefs.getString(PREF_TRANSPORT_MODE, TransportMode.SMS.name)
+                ?.let { stored ->
+                    TransportMode.values().firstOrNull { it.name == stored }
+                }
+                ?: TransportMode.SMS
+            val fallback = prefs.getString(PREF_FALLBACK_TRANSPORT, null)
+                ?.let { stored ->
+                    TransportType.values().firstOrNull { it.name == stored }
+                }
+
+            return TransportConfig(mode = mode, fallback = fallback)
         }
     }
 }
