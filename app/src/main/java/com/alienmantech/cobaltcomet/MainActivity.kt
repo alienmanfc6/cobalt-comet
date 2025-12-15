@@ -36,12 +36,8 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,7 +48,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,9 +62,6 @@ import com.alienmantech.cobaltcomet.models.PhoneEntry
 import com.alienmantech.cobaltcomet.ui.NoContentView
 import com.alienmantech.cobaltcomet.ui.theme.CobaltCometTheme
 import com.alienmantech.cobaltcomet.utils.CommunicationUtils
-import com.alienmantech.cobaltcomet.utils.TransportConfig
-import com.alienmantech.cobaltcomet.utils.TransportMode
-import com.alienmantech.cobaltcomet.utils.TransportType
 import com.alienmantech.cobaltcomet.utils.Utils
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -88,7 +80,6 @@ class MainActivity : ComponentActivity() {
 
     private var phoneEntries by mutableStateOf(listOf<PhoneEntry>())
     private var messages by mutableStateOf(listOf<MessageModel>())
-    private var transportConfig by mutableStateOf(TransportConfig())
     private var bluetoothStatus by mutableStateOf(BluetoothStatus())
     private var shouldOpenBluetoothWizardAfterPermission by mutableStateOf(false)
 
@@ -153,22 +144,7 @@ class MainActivity : ComponentActivity() {
                             phoneEntries = phoneEntries,
                             onManageNumbers = { openContactSelection() },
                             onAddBluetoothContact = { openBluetoothWizard() },
-                            transportConfig = transportConfig,
                             bluetoothStatus = bluetoothStatus,
-                            onTransportModeChanged = { mode ->
-                                transportConfig = transportConfig.copy(mode = mode)
-                                CommunicationUtils.saveTransportConfig(
-                                    this@MainActivity,
-                                    transportConfig
-                                )
-                            },
-                            onFallbackChanged = { fallback ->
-                                transportConfig = transportConfig.copy(fallback = fallback)
-                                CommunicationUtils.saveTransportConfig(
-                                    this@MainActivity,
-                                    transportConfig
-                                )
-                            },
                             onBack = { navController.popBackStack() },
                         )
                     }
@@ -182,7 +158,6 @@ class MainActivity : ComponentActivity() {
 
         phoneEntries = Utils.loadPhoneNumbers(this)
         messages = Utils.loadMessages(this)
-        transportConfig = CommunicationUtils.loadTransportConfig(this)
 
         if (ActivityCompat.checkSelfPermission(
                 this,
@@ -386,10 +361,7 @@ fun SetupScreen(
     phoneEntries: List<PhoneEntry>,
     onManageNumbers: () -> Unit,
     onAddBluetoothContact: () -> Unit,
-    transportConfig: TransportConfig,
     bluetoothStatus: BluetoothStatus,
-    onTransportModeChanged: (TransportMode) -> Unit,
-    onFallbackChanged: (TransportType?) -> Unit,
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -415,12 +387,7 @@ fun SetupScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            TransportControls(
-                transportConfig = transportConfig,
-                bluetoothStatus = bluetoothStatus,
-                onTransportModeChanged = onTransportModeChanged,
-                onFallbackChanged = onFallbackChanged
-            )
+            BluetoothStatusCard(bluetoothStatus = bluetoothStatus)
 
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -552,12 +519,7 @@ fun MessageHistoryScreen(
 }
 
 @Composable
-fun TransportControls(
-    transportConfig: TransportConfig,
-    bluetoothStatus: BluetoothStatus,
-    onTransportModeChanged: (TransportMode) -> Unit,
-    onFallbackChanged: (TransportType?) -> Unit
-) {
+fun BluetoothStatusCard(bluetoothStatus: BluetoothStatus) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -570,136 +532,21 @@ fun TransportControls(
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "Message delivery",
+                    text = "Bluetooth",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Choose how messages are sent and set a fallback option.",
+                    text = "Paired Bluetooth devices appear alongside your contacts.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            ModeSelector(transportConfig.mode, onTransportModeChanged)
-
-            FallbackSelector(
-                mode = transportConfig.mode,
-                selectedFallback = transportConfig.fallback,
-                onFallbackChanged = onFallbackChanged
-            )
-
             BluetoothStatusSummary(
                 bluetoothStatus = bluetoothStatus,
-                shouldHighlightIssues = usesBluetooth(transportConfig)
+                shouldHighlightIssues = true
             )
-        }
-    }
-}
-
-@Composable
-fun ModeSelector(
-    selected: TransportMode,
-    onTransportModeChanged: (TransportMode) -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = "Mode",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChipRow(
-                options = listOf(
-                    TransportMode.SMS to "SMS only",
-                    TransportMode.BLUETOOTH to "Bluetooth only",
-                    TransportMode.AUTO to "Auto"
-                ),
-                selected = selected,
-                onSelectionChanged = onTransportModeChanged
-            )
-            Text(
-                text = when (selected) {
-                    TransportMode.SMS -> "Messages will always send via SMS unless a fallback is set."
-                    TransportMode.BLUETOOTH -> "Messages will send over the paired Bluetooth device when available."
-                    TransportMode.AUTO -> "App will prefer Bluetooth when available and fall back to SMS."
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-fun <T> FilterChipRow(
-    options: List<Pair<T, String>>,
-    selected: T,
-    onSelectionChanged: (T) -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        options.forEach { (value, label) ->
-            FilterChip(
-                selected = value == selected,
-                onClick = { onSelectionChanged(value) },
-                label = { Text(label) },
-                border = BorderStroke(
-                    width = 1.dp,
-                    color = if (value == selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                ),
-                colors = FilterChipDefaults.filterChipColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                )
-            )
-        }
-    }
-}
-
-@Composable
-fun FallbackSelector(
-    mode: TransportMode,
-    selectedFallback: TransportType?,
-    onFallbackChanged: (TransportType?) -> Unit
-) {
-    val availableFallbacks = TransportType.values().filter { it != mode.primaryTransportType() }
-    var isMenuOpen by remember { mutableStateOf(false) }
-
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = "Fallback",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = "Optional transport to try if the selected mode fails.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        TextButton(onClick = { isMenuOpen = true }) {
-            Text(
-                text = selectedFallback?.let { fallback ->
-                    "Fallback: ${fallback.name.lowercase().replaceFirstChar { it.uppercase() }}"
-                } ?: "No fallback selected"
-            )
-        }
-        DropdownMenu(expanded = isMenuOpen, onDismissRequest = { isMenuOpen = false }) {
-            DropdownMenuItem(
-                text = { Text("No fallback") },
-                onClick = {
-                    onFallbackChanged(null)
-                    isMenuOpen = false
-                }
-            )
-            availableFallbacks.forEach { fallback ->
-                DropdownMenuItem(
-                    text = { Text(fallback.name.lowercase().replaceFirstChar { it.uppercase() }) },
-                    onClick = {
-                        onFallbackChanged(fallback)
-                        isMenuOpen = false
-                    }
-                )
-            }
         }
     }
 }
@@ -746,20 +593,6 @@ data class BluetoothStatus(
     val pairedDeviceName: String? = null,
     val pairedDeviceAddress: String? = null
 )
-
-private fun TransportMode.primaryTransportType(): TransportType? {
-    return when (this) {
-        TransportMode.SMS -> TransportType.SMS
-        TransportMode.BLUETOOTH -> TransportType.BLUETOOTH
-        TransportMode.AUTO -> null
-    }
-}
-
-private fun usesBluetooth(config: TransportConfig): Boolean {
-    return config.mode == TransportMode.BLUETOOTH ||
-            config.mode == TransportMode.AUTO ||
-            config.fallback == TransportType.BLUETOOTH
-}
 
 @Composable
 fun MessageCard(
@@ -826,18 +659,12 @@ fun SetupScreenPreview() {
             ),
             onManageNumbers = {},
             onAddBluetoothContact = {},
-            transportConfig = TransportConfig(
-                mode = TransportMode.AUTO,
-                fallback = TransportType.SMS
-            ),
             bluetoothStatus = BluetoothStatus(
                 supported = true,
                 enabled = true,
                 pairedDeviceName = "Truck Radio",
                 pairedDeviceAddress = "00:11:22:33:44:55"
             ),
-            onTransportModeChanged = {},
-            onFallbackChanged = {},
             onBack = {},
         )
     }
