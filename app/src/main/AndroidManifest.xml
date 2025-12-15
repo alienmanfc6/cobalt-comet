@@ -7,6 +7,7 @@
     </queries>
 
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <uses-permission
         android:name="android.permission.BLUETOOTH"
         android:maxSdkVersion="30" />
@@ -14,14 +15,12 @@
         android:name="android.permission.BLUETOOTH_ADMIN"
         android:maxSdkVersion="30" />
     <uses-permission
-        android:name="android.permission.BLUETOOTH_CONNECT"
-        android:usesPermissionSdk23="true" />
+        android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission
-        android:name="android.permission.BLUETOOTH_SCAN"
-        android:usesPermissionSdk23="true" />
+        android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission
-        android:name="android.permission.BLUETOOTH_ADVERTISE"
-        android:usesPermissionSdk23="true" />
+        android:name="android.permission.BLUETOOTH_ADVERTISE" />
+
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
