@@ -207,7 +207,7 @@ class BluetoothMessageService : Service() {
 
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle(getString(R.string.app_name))
-            .setContentText(getString(R.string.bluetooth_service_running))
+            .setContentText("Listening for Bluetooth messages")
             .setSmallIcon(R.mipmap.ic_launcher)
             .build()
 
