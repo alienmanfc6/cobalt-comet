@@ -14,6 +14,11 @@ import com.alienmantech.cobaltcomet.models.MessageModel
 import com.alienmantech.cobaltcomet.models.PhoneEntry
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logError
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logWarn
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
 import java.util.Locale
 import org.json.JSONArray
 
@@ -346,6 +351,42 @@ class Utils {
             }
 
             return Patterns.PHONE.matcher(rawNumber).matches()
+        }
+
+        fun formatReceivedAt(timestamp: Long, nowMillis: Long = System.currentTimeMillis()): String? {
+            if (timestamp <= 0) return null
+
+            val now = Instant.ofEpochMilli(nowMillis).atZone(ZoneId.systemDefault())
+            val receivedTime = Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault())
+
+            val duration = Duration.between(receivedTime, now)
+            val relativeText = when {
+                duration.toMinutes() < 1 -> "Just now"
+                duration.toMinutes() == 1L -> "1 minute ago"
+                duration.toHours() < 1 -> "${duration.toMinutes()} minutes ago"
+                duration.toHours() == 1L -> "1 hour ago"
+                duration.toDays() < 1 -> "${duration.toHours()} hours ago"
+                duration.toDays() == 1L -> "1 day ago"
+                else -> "${duration.toDays()} days ago"
+            }
+
+            val dayOfWeek = receivedTime.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+            val dayOfMonth = formatDayWithSuffix(receivedTime.dayOfMonth)
+            val timeFormatter = DateTimeFormatter.ofPattern("h:mma", Locale.getDefault())
+            val timeText = receivedTime.format(timeFormatter).lowercase(Locale.getDefault())
+
+            return "$relativeText - $dayOfWeek $dayOfMonth at $timeText"
+        }
+
+        private fun formatDayWithSuffix(day: Int): String {
+            val suffix = when {
+                day in 11..13 -> "th"
+                day % 10 == 1 -> "st"
+                day % 10 == 2 -> "nd"
+                day % 10 == 3 -> "rd"
+                else -> "th"
+            }
+            return "$day$suffix"
         }
     }
 }

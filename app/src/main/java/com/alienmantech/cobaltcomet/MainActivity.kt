@@ -371,6 +371,7 @@ fun MessageCard(
     onMessageClick: (MessageModel) -> Unit
 ) {
     val contactName = Utils.getContactName(LocalContext.current, message.from)
+    val timestamp = Utils.formatReceivedAt(message.receivedAt)
 
     val title = when {
         message.locationName.isNotEmpty() -> message.locationName
@@ -405,6 +406,13 @@ fun MessageCard(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (timestamp != null) {
+                Text(
+                    text = timestamp,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
