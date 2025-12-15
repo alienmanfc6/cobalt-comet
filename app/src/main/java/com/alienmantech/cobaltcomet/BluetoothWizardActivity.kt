@@ -1,5 +1,6 @@
 package com.alienmantech.cobaltcomet
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
@@ -7,10 +8,12 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +54,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.alienmantech.cobaltcomet.models.ContactType
 import com.alienmantech.cobaltcomet.models.PhoneEntry
 import com.alienmantech.cobaltcomet.ui.theme.CobaltCometTheme
@@ -64,6 +69,30 @@ class BluetoothWizardActivity : ComponentActivity() {
 
     private val discoveredDevices = mutableStateListOf<BluetoothDeviceInfo>()
     private var selectedDevice by mutableStateOf<BluetoothDeviceInfo?>(null)
+    private val snackbarHostState = SnackbarHostState()
+    private var pendingPermissionAction: (() -> Unit)? = null
+    private var pendingEnableAction: (() -> Unit)? = null
+
+    private val bluetoothPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            val allGranted = permissions.values.all { it }
+            if (allGranted) {
+                pendingPermissionAction?.invoke()
+            } else {
+                showError("Bluetooth permissions are required to continue.")
+            }
+            pendingPermissionAction = null
+        }
+
+    private val enableBluetoothLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                pendingEnableAction?.invoke()
+            } else {
+                showError("Enable Bluetooth to continue the wizard.")
+            }
+            pendingEnableAction = null
+        }
 
     private val discoveryReceiver = object : BroadcastReceiver() {
         @SuppressLint("MissingPermission")
@@ -97,7 +126,6 @@ class BluetoothWizardActivity : ComponentActivity() {
 
         setContent {
             CobaltCometTheme {
-                val snackbarHostState = remember { SnackbarHostState() }
                 Scaffold(
                     topBar = {
                         TopAppBar(
@@ -140,9 +168,13 @@ class BluetoothWizardActivity : ComponentActivity() {
 
     @SuppressLint("MissingPermission")
     private fun startDiscovery() {
-        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return
-        adapter.cancelDiscovery()
-        adapter.startDiscovery()
+        ensureBluetoothReady { adapter ->
+            adapter.cancelDiscovery()
+            val started = adapter.startDiscovery()
+            if (!started) {
+                showError("Unable to start Bluetooth discovery. Try again.")
+            }
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -152,17 +184,18 @@ class BluetoothWizardActivity : ComponentActivity() {
 
     @SuppressLint("MissingPermission")
     private fun refreshBondedDevices() {
-        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return
-        val bonded = adapter.bondedDevices
-            .map { device ->
-                BluetoothDeviceInfo(
-                    name = device.name.orEmpty(),
-                    address = device.address,
-                    isBonded = true
-                )
-            }
-        discoveredDevices.clear()
-        discoveredDevices.addAll(bonded)
+        ensureBluetoothReady { adapter ->
+            val bonded = adapter.bondedDevices
+                .map { device ->
+                    BluetoothDeviceInfo(
+                        name = device.name.orEmpty(),
+                        address = device.address,
+                        isBonded = true
+                    )
+                }
+            discoveredDevices.clear()
+            discoveredDevices.addAll(bonded)
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -207,28 +240,107 @@ class BluetoothWizardActivity : ComponentActivity() {
     }
 
     private fun requestDiscoverableAndScan() {
-        val discoverableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
-            putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
-        }
+        ensureBluetoothReady(requireAdvertise = true) { adapter ->
+            val discoverableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+                putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
+            }
 
-        // Ask the user to place this device into pairing mode so that another device running the
-        // wizard can discover it, then immediately start scanning for the peer device.
-        startActivity(discoverableIntent)
-        startDiscovery()
+            // Ask the user to place this device into pairing mode so that another device running the
+            // wizard can discover it, then immediately start scanning for the peer device.
+            startActivity(discoverableIntent)
+            adapter.cancelDiscovery()
+            val started = adapter.startDiscovery()
+            if (!started) {
+                showError("Unable to scan for Bluetooth devices. Try again.")
+            }
+        }
     }
 
     @SuppressLint("MissingPermission")
     private fun startPairing(deviceInfo: BluetoothDeviceInfo) {
-        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return
-        val remoteDevice = adapter.getRemoteDevice(deviceInfo.address)
+        ensureBluetoothReady { adapter ->
+            val remoteDevice = adapter.getRemoteDevice(deviceInfo.address)
 
-        selectedDevice = deviceInfo
+            selectedDevice = deviceInfo
 
-        when (remoteDevice.bondState) {
-            BluetoothDevice.BOND_NONE -> remoteDevice.createBond()
-            BluetoothDevice.BOND_BONDING, BluetoothDevice.BOND_BONDED -> {
-                // No action needed; the receiver will update the bonded state and UI.
+            when (remoteDevice.bondState) {
+                BluetoothDevice.BOND_NONE -> {
+                    val started = remoteDevice.createBond()
+                    if (!started) {
+                        showError("Could not start pairing with ${deviceInfo.name.ifBlank { "device" }}.")
+                    }
+                }
+
+                BluetoothDevice.BOND_BONDING, BluetoothDevice.BOND_BONDED -> {
+                    // No action needed; the receiver will update the bonded state and UI.
+                }
             }
+        }
+    }
+
+    private fun ensureBluetoothReady(
+        requireAdvertise: Boolean = false,
+        onReady: (BluetoothAdapter) -> Unit
+    ) {
+        val adapter = BluetoothAdapter.getDefaultAdapter()
+        if (adapter == null) {
+            showError("Bluetooth is not supported on this device.")
+            return
+        }
+
+        if (!hasBluetoothPermissions(requireAdvertise)) {
+            pendingPermissionAction = { ensureBluetoothReady(requireAdvertise, onReady) }
+            requestBluetoothPermissions(requireAdvertise)
+            return
+        }
+
+        if (!adapter.isEnabled) {
+            pendingEnableAction = { ensureBluetoothReady(requireAdvertise, onReady) }
+            promptEnableBluetooth()
+            return
+        }
+
+        onReady(adapter)
+    }
+
+    private fun hasBluetoothPermissions(requireAdvertise: Boolean = false): Boolean {
+        val hasConnectPermission = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.BLUETOOTH_CONNECT
+        ) == PackageManager.PERMISSION_GRANTED
+
+        val hasScanPermission = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.BLUETOOTH_SCAN
+        ) == PackageManager.PERMISSION_GRANTED
+
+        val hasAdvertisePermission = !requireAdvertise || ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.BLUETOOTH_ADVERTISE
+        ) == PackageManager.PERMISSION_GRANTED
+
+        return hasConnectPermission && hasScanPermission && hasAdvertisePermission
+    }
+
+    private fun requestBluetoothPermissions(requireAdvertise: Boolean) {
+        val permissions = buildList {
+            add(Manifest.permission.BLUETOOTH_CONNECT)
+            add(Manifest.permission.BLUETOOTH_SCAN)
+            if (requireAdvertise) {
+                add(Manifest.permission.BLUETOOTH_ADVERTISE)
+            }
+        }
+        bluetoothPermissionLauncher.launch(permissions.toTypedArray())
+    }
+
+    private fun promptEnableBluetooth() {
+        val enableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+        enableBluetoothLauncher.launch(enableIntent)
+    }
+
+    private fun showError(message: String) {
+        lifecycleScope.launch {
+            snackbarHostState.showSnackbar(message)
         }
     }
 }
