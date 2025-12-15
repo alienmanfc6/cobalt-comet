@@ -83,12 +83,14 @@ class MainActivity : ComponentActivity() {
         private const val REQUEST_SMS_PERMISSION = 1
         private const val REQUEST_DRAW_PERMISSION = 2
         private const val REQUEST_CONTACTS_PERMISSION = 3
+        private const val REQUEST_BLUETOOTH_PERMISSION = 4
     }
 
     private var phoneEntries by mutableStateOf(listOf<PhoneEntry>())
     private var messages by mutableStateOf(listOf<MessageModel>())
     private var transportConfig by mutableStateOf(TransportConfig())
     private var bluetoothStatus by mutableStateOf(BluetoothStatus())
+    private var shouldOpenBluetoothWizardAfterPermission by mutableStateOf(false)
 
     private val contactSelectionLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -236,6 +238,31 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openBluetoothWizard() {
+        if (!hasBluetoothPermission()) {
+            shouldOpenBluetoothWizardAfterPermission = true
+            requestBluetoothPermission()
+            return
+        }
+
+        startBluetoothWizard()
+    }
+
+    private fun hasBluetoothPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            this@MainActivity,
+            Manifest.permission.BLUETOOTH_CONNECT
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun requestBluetoothPermission() {
+        ActivityCompat.requestPermissions(
+            this@MainActivity,
+            arrayOf(Manifest.permission.BLUETOOTH_CONNECT),
+            REQUEST_BLUETOOTH_PERMISSION
+        )
+    }
+
+    private fun startBluetoothWizard() {
         val intent = Intent(this, BluetoothWizardActivity::class.java)
         bluetoothWizardLauncher.launch(intent)
     }
@@ -333,6 +360,15 @@ class MainActivity : ComponentActivity() {
         if (requestCode == REQUEST_SMS_PERMISSION || requestCode == REQUEST_CONTACTS_PERMISSION) {
             // check permissions again, we may need to look for more
             checkPermissions()
+        } else if (requestCode == REQUEST_BLUETOOTH_PERMISSION) {
+            val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+            if (granted) {
+                bluetoothStatus = fetchBluetoothStatus()
+                if (shouldOpenBluetoothWizardAfterPermission) {
+                    startBluetoothWizard()
+                }
+            }
+            shouldOpenBluetoothWizardAfterPermission = false
         }
     }
 }
