@@ -24,3 +24,24 @@ jobs:
       run: chmod +x gradlew
     - name: Build with Gradle
       run: ./gradlew build
+    - name: Assemble release bundle
+      if: github.event_name == 'push'
+      run: ./gradlew assembleRelease
+    - name: Sign release artifacts
+      id: sign_app
+      if: github.event_name == 'push'
+      uses: r0adkll/sign-android-release@v1
+      with:
+        releaseDirectory: app/build/outputs/apk/release
+        signingKeyBase64: ${{ secrets.ANDROID_SIGNING_KEY }}
+        alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+        keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    - name: Publish to Google Play
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/')
+      uses: r0adkll/upload-google-play@v1
+      with:
+        serviceAccountJsonPlain: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        packageName: com.alienmantech.cobaltcomet
+        releaseFiles: ${{ steps.sign_app.outputs.signedReleaseFile }}
+        track: production
