@@ -122,7 +122,9 @@ class BluetoothWizardActivity : ComponentActivity() {
                         snackbarHostState = snackbarHostState,
                         selectedDevice = selectedDevice,
                         onStartDiscovery = { startDiscovery() },
+                        onPrepareAndScan = { requestDiscoverableAndScan() },
                         onSelectDevice = { device -> selectedDevice = device },
+                        onStartPairing = { device -> startPairing(device) },
                         onSaveContact = { label -> saveSelection(label) }
                     )
                 }
@@ -177,6 +179,10 @@ class BluetoothWizardActivity : ComponentActivity() {
         } else {
             discoveredDevices[existingIndex] = info
         }
+
+        if (selectedDevice?.address == info.address) {
+            selectedDevice = info
+        }
     }
 
     private fun saveSelection(label: String) {
@@ -199,6 +205,32 @@ class BluetoothWizardActivity : ComponentActivity() {
         setResult(RESULT_OK, resultIntent)
         finish()
     }
+
+    private fun requestDiscoverableAndScan() {
+        val discoverableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+            putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
+        }
+
+        // Ask the user to place this device into pairing mode so that another device running the
+        // wizard can discover it, then immediately start scanning for the peer device.
+        startActivity(discoverableIntent)
+        startDiscovery()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startPairing(deviceInfo: BluetoothDeviceInfo) {
+        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return
+        val remoteDevice = adapter.getRemoteDevice(deviceInfo.address)
+
+        selectedDevice = deviceInfo
+
+        when (remoteDevice.bondState) {
+            BluetoothDevice.BOND_NONE -> remoteDevice.createBond()
+            BluetoothDevice.BOND_BONDING, BluetoothDevice.BOND_BONDED -> {
+                // No action needed; the receiver will update the bonded state and UI.
+            }
+        }
+    }
 }
 
 @Composable
@@ -208,7 +240,9 @@ private fun WizardContent(
     snackbarHostState: SnackbarHostState,
     selectedDevice: BluetoothDeviceInfo?,
     onStartDiscovery: () -> Unit,
+    onPrepareAndScan: () -> Unit,
     onSelectDevice: (BluetoothDeviceInfo) -> Unit,
+    onStartPairing: (BluetoothDeviceInfo) -> Unit,
     onSaveContact: (String) -> Unit
 ) {
     var step by remember { mutableStateOf(WizardStep.Prepare) }
@@ -218,7 +252,7 @@ private fun WizardContent(
     LaunchedEffect(selectedDevice) {
         if (selectedDevice != null) {
             label = selectedDevice.name
-            step = WizardStep.SaveContact
+            step = if (selectedDevice.isBonded) WizardStep.SaveContact else WizardStep.Pairing
         }
     }
 
@@ -232,11 +266,24 @@ private fun WizardContent(
             WizardHeader(step)
 
             when (step) {
-                WizardStep.Prepare -> PrepareStep(onContinue = { step = WizardStep.Scan })
+                WizardStep.Prepare -> PrepareStep(
+                    onContinue = {
+                        onPrepareAndScan()
+                        step = WizardStep.Scan
+                    }
+                )
                 WizardStep.Scan -> DeviceSelectionStep(
                     devices = devices,
                     onStartDiscovery = onStartDiscovery,
-                    onSelectDevice = onSelectDevice
+                    onSelectDevice = {
+                        onStartPairing(it)
+                        onSelectDevice(it)
+                    }
+                )
+
+                WizardStep.Pairing -> PairingStep(
+                    device = selectedDevice,
+                    onRefresh = onStartDiscovery
                 )
 
                 WizardStep.SaveContact -> SaveContactStep(
@@ -268,8 +315,9 @@ private fun WizardHeader(step: WizardStep) {
         )
         Text(
             text = when (step) {
-                WizardStep.Prepare -> "Turn on Bluetooth and get ready to scan."
-                WizardStep.Scan -> "Choose the device you want to pair with."
+                WizardStep.Prepare -> "Open this wizard on both devices to place them into pairing mode."
+                WizardStep.Scan -> "Both devices are discoverable. Choose the other device to pair with it."
+                WizardStep.Pairing -> "Confirm the pairing prompts on both devices."
                 WizardStep.SaveContact -> "Save the paired device as a contact for sharing."
             },
             style = MaterialTheme.typography.bodyMedium,
@@ -287,12 +335,12 @@ private fun PrepareStep(onContinue: () -> Unit) {
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "Enable Bluetooth",
+                    text = "Enable Bluetooth and pairing mode",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Make sure Bluetooth is turned on and the device you want to pair is discoverable.",
+                    text = "Start this wizard on both devices. We'll request discoverable mode so they can see each other automatically.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -346,6 +394,39 @@ private fun DeviceSelectionStep(
 }
 
 @Composable
+private fun PairingStep(device: BluetoothDeviceInfo?, onRefresh: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = "Waiting for pairing",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = device?.name?.ifBlank { "Other device" } ?: "Other device",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Keep both wizards open and accept the Bluetooth pairing prompts on each device so they can exchange messages without SMS.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Button(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) {
+            Text("Check pairing status")
+        }
+    }
+}
+
+@Composable
 private fun DeviceRow(device: BluetoothDeviceInfo, onSelect: (BluetoothDeviceInfo) -> Unit) {
     Card(
         modifier = Modifier
@@ -382,6 +463,7 @@ private fun SaveContactStep(
     device: BluetoothDeviceInfo?,
     onSave: () -> Unit
 ) {
+    val isBonded = device?.isBonded == true
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             text = "Save device",
@@ -418,7 +500,15 @@ private fun SaveContactStep(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        Button(onClick = onSave, modifier = Modifier.fillMaxWidth(), enabled = device != null) {
+        if (!isBonded) {
+            Text(
+                text = "Finish pairing on both devices to enable messaging over Bluetooth.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Button(onClick = onSave, modifier = Modifier.fillMaxWidth(), enabled = device != null && isBonded) {
             Text("Save and finish")
         }
     }
@@ -433,6 +523,7 @@ private data class BluetoothDeviceInfo(
 private enum class WizardStep {
     Prepare,
     Scan,
+    Pairing,
     SaveContact
 }
 
@@ -449,7 +540,9 @@ private fun WizardPreview() {
             snackbarHostState = SnackbarHostState(),
             selectedDevice = mockDevices.first(),
             onStartDiscovery = {},
+            onPrepareAndScan = {},
             onSelectDevice = {},
+            onStartPairing = {},
             onSaveContact = {}
         )
     }
