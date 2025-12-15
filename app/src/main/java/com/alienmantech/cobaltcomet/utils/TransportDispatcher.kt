@@ -2,10 +2,10 @@ package com.alienmantech.cobaltcomet.utils
 
 import android.content.Context
 import android.widget.Toast
+import com.alienmantech.cobaltcomet.models.ContactType
+import com.alienmantech.cobaltcomet.models.PhoneEntry
 
-class TransportDispatcher(
-    private val config: TransportConfig = TransportConfig()
-) {
+class TransportDispatcher {
 
     private val smsTransport = SmsCommunicationTransport()
     private val bluetoothTransport = BluetoothCommunicationTransport()
@@ -14,73 +14,25 @@ class TransportDispatcher(
         TransportType.BLUETOOTH to bluetoothTransport
     )
 
-    fun dispatch(context: Context, to: String, body: String): Boolean {
-        if (!TransportPreflight.validateBase(context, to, body)) {
+    fun dispatch(context: Context, recipient: PhoneEntry, body: String): Boolean {
+        if (!TransportPreflight.validateBase(context, recipient.number, body)) {
             return false
         }
 
-        return when (config.mode) {
-            TransportMode.SMS -> sendWithFallback(context, to, body, TransportType.SMS, config.fallback)
-            TransportMode.BLUETOOTH -> sendWithFallback(context, to, body, TransportType.BLUETOOTH, config.fallback)
-            TransportMode.AUTO -> dispatchAuto(context, to, body)
+        val transportType = when (recipient.type) {
+            ContactType.BLUETOOTH -> TransportType.BLUETOOTH
+            ContactType.PHONE -> TransportType.SMS
         }
-    }
 
-    private fun dispatchAuto(context: Context, to: String, body: String): Boolean {
-        val preferredOrder = if (bluetoothTransport.canHandle(to)) {
-            listOf(TransportType.BLUETOOTH, TransportType.SMS)
+        val transport = transports[transportType]
+        val isValid = validateForTransport(context, recipient.number, transportType)
+
+        return if (isValid && transport?.send(context, recipient.number, body) == true) {
+            true
         } else {
-            listOf(TransportType.SMS, TransportType.BLUETOOTH)
+            notifyFailure(context, transportType)
+            false
         }
-
-        val explicitFallback = config.fallback?.let { listOf(it) } ?: emptyList()
-        val attempts = (preferredOrder + explicitFallback).distinct()
-
-        for (transportType in attempts) {
-            val transport = transports[transportType] ?: continue
-            if (!validateForTransport(context, to, transportType)) {
-                continue
-            }
-
-            if (transport.send(context, to, body)) {
-                return true
-            } else {
-                notifyFailure(context, transportType)
-            }
-        }
-
-        return false
-    }
-
-    private fun sendWithFallback(
-        context: Context,
-        to: String,
-        body: String,
-        primary: TransportType,
-        fallback: TransportType?
-    ): Boolean {
-        val primaryTransport = transports[primary]
-        if (!validateForTransport(context, to, primary)) {
-            return false
-        }
-
-        val primaryResult = primaryTransport?.send(context, to, body) ?: false
-        if (primaryResult) {
-            return true
-        }
-
-        notifyFailure(context, primary)
-
-        val fallbackTransport = fallback?.let { transports[it] }
-            ?: if (primary == TransportType.BLUETOOTH) smsTransport else null
-
-        return fallbackTransport?.let { fallbackTransportInstance ->
-            if (validateForTransport(context, to, TransportType.SMS)) {
-                fallbackTransportInstance.send(context, to, body)
-            } else {
-                false
-            }
-        } ?: false
     }
 
     private fun validateForTransport(
@@ -98,7 +50,7 @@ class TransportDispatcher(
         when (transportType) {
             TransportType.BLUETOOTH -> Toast.makeText(
                 context,
-                "Bluetooth send failed. Trying SMS if available…",
+                "Bluetooth send failed.",
                 Toast.LENGTH_SHORT
             ).show()
 
@@ -109,17 +61,6 @@ class TransportDispatcher(
             ).show()
         }
     }
-}
-
-data class TransportConfig(
-    val mode: TransportMode = TransportMode.SMS,
-    val fallback: TransportType? = null
-)
-
-enum class TransportMode {
-    SMS,
-    BLUETOOTH,
-    AUTO
 }
 
 enum class TransportType {

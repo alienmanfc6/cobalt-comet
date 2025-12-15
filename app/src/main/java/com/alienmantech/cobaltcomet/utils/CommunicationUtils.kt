@@ -4,22 +4,21 @@ import android.content.Context
 import android.text.TextUtils
 import android.widget.Toast
 import com.alienmantech.cobaltcomet.models.MessageModel
+import com.alienmantech.cobaltcomet.models.PhoneEntry
 import com.alienmantech.cobaltcomet.utils.Logger
 
 class CommunicationUtils {
     companion object {
         const val SMS_PREFIX = "CobaltComet"
-        private const val PREF_TRANSPORT_MODE = "transport_mode"
-        private const val PREF_FALLBACK_TRANSPORT = "transport_fallback"
 
-        fun sendMessage(context: Context, to: String?, body: String): Boolean {
-            val recipient = to?.trim()
-            if (!TransportPreflight.validateBase(context, recipient, body)) {
+        fun sendMessage(context: Context, entry: PhoneEntry?, body: String): Boolean {
+            if (entry == null) {
+                Toast.makeText(context, "No recipient selected", Toast.LENGTH_SHORT).show()
                 return false
             }
 
-            val dispatcher = TransportDispatcher(loadTransportConfig(context))
-            return dispatcher.dispatch(context, recipient.orEmpty(), body)
+            val dispatcher = TransportDispatcher()
+            return dispatcher.dispatch(context, entry, body)
         }
 
         // decide if this is a message we want to try to process
@@ -149,27 +148,5 @@ class CommunicationUtils {
             }
         }
 
-        fun saveTransportConfig(context: Context, config: TransportConfig) {
-            val prefs = Utils.getSavePref(context)
-            prefs.edit()
-                .putString(PREF_TRANSPORT_MODE, config.mode.name)
-                .putString(PREF_FALLBACK_TRANSPORT, config.fallback?.name)
-                .apply()
-        }
-
-        fun loadTransportConfig(context: Context): TransportConfig {
-            val prefs = Utils.getSavePref(context)
-            val mode = prefs.getString(PREF_TRANSPORT_MODE, TransportMode.SMS.name)
-                ?.let { stored ->
-                    TransportMode.values().firstOrNull { it.name == stored }
-                }
-                ?: TransportMode.SMS
-            val fallback = prefs.getString(PREF_FALLBACK_TRANSPORT, null)
-                ?.let { stored ->
-                    TransportType.values().firstOrNull { it.name == stored }
-                }
-
-            return TransportConfig(mode = mode, fallback = fallback)
-        }
     }
 }

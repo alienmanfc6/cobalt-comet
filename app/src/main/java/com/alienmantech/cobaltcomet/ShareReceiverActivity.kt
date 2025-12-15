@@ -47,7 +47,7 @@ class ShareReceiverActivity : ComponentActivity() {
         val phoneNumbers = Utils.loadPhoneNumbers(this)
 
         if (phoneNumbers.size == 1) {
-            handleIntent(phoneNumbers.first().number)
+            handleIntent(phoneNumbers.first())
             finish()
             return
         }
@@ -58,7 +58,7 @@ class ShareReceiverActivity : ComponentActivity() {
                     phoneNumbers = phoneNumbers,
                     showYelpError = shouldShowYelpErrorMessage,
                     onSelectNumber = { selectedNumber ->
-                        handleIntent(selectedNumber.number)
+                        handleIntent(selectedNumber)
                         finish()
                     },
                     onDismiss = { finish() }
@@ -67,22 +67,22 @@ class ShareReceiverActivity : ComponentActivity() {
         }
     }
 
-    private fun handleIntent(to: String) {
+    private fun handleIntent(entry: PhoneEntry) {
         if (intent.action.equals(Intent.ACTION_SEND)) {
             if (intent.type.equals("text/plain")) {
                 val title = intent.getStringExtra(Intent.EXTRA_TITLE)
                 val clipText = intent.getStringExtra(Intent.EXTRA_TEXT)
                 // send encoded data and map link together
-                sendMessage(to, CommunicationUtils.encodeUrlMessage(title, clipText))
+                sendMessage(entry, CommunicationUtils.encodeUrlMessage(title, clipText))
             }
         } else if (intent.action.equals(Intent.ACTION_VIEW)) {
             intent.data?.let { data ->
                 if (data.scheme.equals("geo")) {
                     val (lat, lng, locationName) = parseGeoData(data)
                     if (lat.isNotEmpty() && lng.isNotEmpty()) {
-                        sendMessage(to, CommunicationUtils.encodeGeoMessage(lat, lng, locationName))
+                        sendMessage(entry, CommunicationUtils.encodeGeoMessage(lat, lng, locationName))
                     } else if (locationName.isNotEmpty()) {
-                        sendMessage(to, CommunicationUtils.encodeGeoMessage("", "", locationName))
+                        sendMessage(entry, CommunicationUtils.encodeGeoMessage("", "", locationName))
                     }
                 }
             }
@@ -119,8 +119,8 @@ class ShareReceiverActivity : ComponentActivity() {
         }
     }
 
-    private fun sendMessage(to: String, message: String) {
-        CommunicationUtils.sendMessage(this, to, message)
+    private fun sendMessage(entry: PhoneEntry, message: String) {
+        CommunicationUtils.sendMessage(this, entry, message)
     }
 
     private val shouldShowYelpErrorMessage: Boolean
