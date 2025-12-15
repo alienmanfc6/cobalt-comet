@@ -150,6 +150,7 @@ class MainActivity : ComponentActivity() {
                         SetupScreen(
                             phoneEntries = phoneEntries,
                             onManageNumbers = { openContactSelection() },
+                            onAddBluetoothContact = { openBluetoothWizard() },
                             transportConfig = transportConfig,
                             bluetoothStatus = bluetoothStatus,
                             onTransportModeChanged = { mode ->
@@ -166,7 +167,7 @@ class MainActivity : ComponentActivity() {
                                     transportConfig
                                 )
                             },
-                            onBack = { navController.popBackStack() }
+                            onBack = { navController.popBackStack() },
                         )
                     }
                 }
@@ -781,6 +782,7 @@ fun SetupScreenPreview() {
                 PhoneEntry(label = "Driver Two", number = "555-5678")
             ),
             onManageNumbers = {},
+            onAddBluetoothContact = {},
             transportConfig = TransportConfig(
                 mode = TransportMode.AUTO,
                 fallback = TransportType.SMS
@@ -793,7 +795,7 @@ fun SetupScreenPreview() {
             ),
             onTransportModeChanged = {},
             onFallbackChanged = {},
-            onBack = {}
+            onBack = {},
         )
     }
 }
