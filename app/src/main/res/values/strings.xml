@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Uplink</string>
+    <string name="bluetooth_service_running">Listening for Bluetooth messages</string>
 </resources>
