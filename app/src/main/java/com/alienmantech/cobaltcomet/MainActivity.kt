@@ -12,6 +12,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresPermission
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,6 +27,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
@@ -36,6 +39,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -104,51 +108,47 @@ class MainActivity : ComponentActivity() {
         setContent {
             CobaltCometTheme {
                 val navController = rememberNavController()
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Box(
-                        modifier = Modifier
-                            .padding(innerPadding)
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.background)
-                    ) {
-                        NavHost(
-                            navController = navController,
-                            startDestination = MainRoute,
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            composable(MainRoute) {
-                                MessageHistoryScreen(
-                                    messages = messages,
-                                    onMessageClick = { message ->
-                                        CommunicationUtils.handleMessageAction(this@MainActivity, message)
-                                    },
-                                    onSettingsClick = { navController.navigate(SetupRoute) }
+                NavHost(
+                    navController = navController,
+                    startDestination = MainRoute,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
+                    composable(MainRoute) {
+                        MessageHistoryScreen(
+                            messages = messages,
+                            onMessageClick = { message ->
+                                CommunicationUtils.handleMessageAction(
+                                    this@MainActivity,
+                                    message
                                 )
-                            }
-                            composable(SetupRoute) {
-                                SetupScreen(
-                                    phoneEntries = phoneEntries,
-                                    onManageNumbers = { openContactSelection() },
-                                    transportConfig = transportConfig,
-                                    bluetoothStatus = bluetoothStatus,
-                                    onTransportModeChanged = { mode ->
-                                        transportConfig = transportConfig.copy(mode = mode)
-                                        CommunicationUtils.saveTransportConfig(
-                                            this@MainActivity,
-                                            transportConfig
-                                        )
-                                    },
-                                    onFallbackChanged = { fallback ->
-                                        transportConfig = transportConfig.copy(fallback = fallback)
-                                        CommunicationUtils.saveTransportConfig(
-                                            this@MainActivity,
-                                            transportConfig
-                                        )
-                                    },
-                                    onBack = { navController.popBackStack() }
+                            },
+                            onSettingsClick = { navController.navigate(SetupRoute) }
+                        )
+                    }
+                    composable(SetupRoute) {
+                        SetupScreen(
+                            phoneEntries = phoneEntries,
+                            onManageNumbers = { openContactSelection() },
+                            transportConfig = transportConfig,
+                            bluetoothStatus = bluetoothStatus,
+                            onTransportModeChanged = { mode ->
+                                transportConfig = transportConfig.copy(mode = mode)
+                                CommunicationUtils.saveTransportConfig(
+                                    this@MainActivity,
+                                    transportConfig
                                 )
-                            }
-                        }
+                            },
+                            onFallbackChanged = { fallback ->
+                                transportConfig = transportConfig.copy(fallback = fallback)
+                                CommunicationUtils.saveTransportConfig(
+                                    this@MainActivity,
+                                    transportConfig
+                                )
+                            },
+                            onBack = { navController.popBackStack() }
+                        )
                     }
                 }
             }
@@ -161,7 +161,14 @@ class MainActivity : ComponentActivity() {
         phoneEntries = Utils.loadPhoneNumbers(this)
         messages = Utils.loadMessages(this)
         transportConfig = CommunicationUtils.loadTransportConfig(this)
-        bluetoothStatus = fetchBluetoothStatus()
+
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            bluetoothStatus = fetchBluetoothStatus()
+        }
     }
 
     override fun onPause() {
@@ -170,11 +177,10 @@ class MainActivity : ComponentActivity() {
         savePhoneEntries(phoneEntries)
     }
 
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private fun fetchBluetoothStatus(): BluetoothStatus {
         val adapter = BluetoothAdapter.getDefaultAdapter()
-        if (adapter == null) {
-            return BluetoothStatus(supported = false, enabled = false)
-        }
+            ?: return BluetoothStatus(supported = false, enabled = false)
 
         val paired = adapter.bondedDevices.firstOrNull()
         return BluetoothStatus(
@@ -306,6 +312,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SetupScreen(
     phoneEntries: List<PhoneEntry>,
@@ -335,31 +342,10 @@ fun SetupScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp, vertical = 24.dp),
+                .padding(horizontal = 16.dp, vertical = 24.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-                        shape = MaterialTheme.shapes.medium
-                    )
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    text = "Uplink",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = "Your dispatch co-pilot with a cosmic glow.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-            }
-
             TransportControls(
                 transportConfig = transportConfig,
                 bluetoothStatus = bluetoothStatus,
@@ -428,6 +414,7 @@ fun SetupScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MessageHistoryScreen(
     messages: List<MessageModel>,
@@ -756,7 +743,10 @@ fun SetupScreenPreview() {
                 PhoneEntry(label = "Driver Two", number = "555-5678")
             ),
             onManageNumbers = {},
-            transportConfig = TransportConfig(mode = TransportMode.AUTO, fallback = TransportType.SMS),
+            transportConfig = TransportConfig(
+                mode = TransportMode.AUTO,
+                fallback = TransportType.SMS
+            ),
             bluetoothStatus = BluetoothStatus(
                 supported = true,
                 enabled = true,
