@@ -95,6 +95,11 @@
             android:name=".ContactSelectionActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".BluetoothWizardActivity"
+            android:exported="false"
+            android:theme="@style/Theme.CobaltComet" />
+
         <receiver
             android:name=".receivers.SmsReceiver"
             android:exported="true"
