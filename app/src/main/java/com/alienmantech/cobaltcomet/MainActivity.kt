@@ -57,6 +57,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.alienmantech.cobaltcomet.models.ContactType
 import com.alienmantech.cobaltcomet.models.MessageModel
 import com.alienmantech.cobaltcomet.models.PhoneEntry
 import com.alienmantech.cobaltcomet.ui.NoContentView
@@ -97,6 +98,24 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    private val bluetoothWizardLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                result.data?.getStringExtra(BluetoothWizardActivity.EXTRA_PAIRED_ENTRY)
+                    ?.let { json ->
+                        val newEntry = Utils.decodePhoneEntries(json).firstOrNull()
+                        if (newEntry != null) {
+                            val merged = phoneEntries.toMutableList().apply {
+                                removeAll { it.number == newEntry.number }
+                                add(0, newEntry)
+                            }
+                            phoneEntries = merged
+                            savePhoneEntries(merged)
+                        }
+                    }
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ensureSmsPermissionOnStart()
@@ -129,6 +148,7 @@ class MainActivity : ComponentActivity() {
                                 SetupScreen(
                                     phoneEntries = phoneEntries,
                                     onManageNumbers = { openContactSelection() },
+                                    onAddBluetoothContact = { openBluetoothWizard() },
                                     transportConfig = transportConfig,
                                     bluetoothStatus = bluetoothStatus,
                                     onTransportModeChanged = { mode ->
@@ -207,6 +227,11 @@ class MainActivity : ComponentActivity() {
             )
         }
         contactSelectionLauncher.launch(intent)
+    }
+
+    private fun openBluetoothWizard() {
+        val intent = Intent(this, BluetoothWizardActivity::class.java)
+        bluetoothWizardLauncher.launch(intent)
     }
 
     private fun checkPermissions() {
@@ -310,6 +335,7 @@ class MainActivity : ComponentActivity() {
 fun SetupScreen(
     phoneEntries: List<PhoneEntry>,
     onManageNumbers: () -> Unit,
+    onAddBluetoothContact: () -> Unit,
     transportConfig: TransportConfig,
     bluetoothStatus: BluetoothStatus,
     onTransportModeChanged: (TransportMode) -> Unit,
@@ -372,7 +398,7 @@ fun SetupScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Driver phone numbers",
+                    text = "Driver contacts",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -384,11 +410,20 @@ fun SetupScreen(
                     Text(text = "Select from contacts")
                 }
 
+                Button(
+                    onClick = onAddBluetoothContact,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                ) {
+                    Text(text = "Pair Bluetooth device")
+                }
+
                 Spacer(modifier = Modifier.height(12.dp))
 
                 if (phoneEntries.isEmpty()) {
                     Text(
-                        text = "No driver numbers selected.",
+                        text = "No driver contacts selected.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -411,7 +446,11 @@ fun SetupScreen(
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = entry.number,
+                                        text = if (entry.type == ContactType.BLUETOOTH) {
+                                            "Bluetooth • ${entry.number}"
+                                        } else {
+                                            entry.number
+                                        },
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -750,16 +789,17 @@ fun MessageCard(
 @Composable
 fun SetupScreenPreview() {
     CobaltCometTheme {
-        SetupScreen(
-            phoneEntries = listOf(
-                PhoneEntry(label = "Driver One", number = "555-1234"),
-                PhoneEntry(label = "Driver Two", number = "555-5678")
-            ),
-            onManageNumbers = {},
-            transportConfig = TransportConfig(mode = TransportMode.AUTO, fallback = TransportType.SMS),
-            bluetoothStatus = BluetoothStatus(
-                supported = true,
-                enabled = true,
+            SetupScreen(
+                phoneEntries = listOf(
+                    PhoneEntry(label = "Driver One", number = "555-1234"),
+                    PhoneEntry(label = "Driver Two", number = "555-5678")
+                ),
+                onManageNumbers = {},
+                onAddBluetoothContact = {},
+                transportConfig = TransportConfig(mode = TransportMode.AUTO, fallback = TransportType.SMS),
+                bluetoothStatus = BluetoothStatus(
+                    supported = true,
+                    enabled = true,
                 pairedDeviceName = "Truck Radio",
                 pairedDeviceAddress = "00:11:22:33:44:55"
             ),

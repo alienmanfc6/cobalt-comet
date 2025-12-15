@@ -33,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.alienmantech.cobaltcomet.models.ContactType
 import com.alienmantech.cobaltcomet.models.PhoneEntry
 import com.alienmantech.cobaltcomet.ui.theme.CobaltCometTheme
 import com.alienmantech.cobaltcomet.utils.CommunicationUtils
@@ -193,7 +194,7 @@ private fun ShareReceiverSheetContent(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Select a phone number",
+            text = "Select a contact",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold
         )
@@ -208,7 +209,7 @@ private fun ShareReceiverSheetContent(
 
         if (phoneNumbers.isEmpty()) {
             Text(
-                text = "No saved phone numbers.",
+                text = "No saved contacts.",
                 style = MaterialTheme.typography.bodyMedium
             )
         } else {
@@ -242,7 +243,12 @@ private fun PhoneNumberRow(
             .padding(vertical = 12.dp, horizontal = 8.dp)
     ) {
         Text(text = entry.label, style = MaterialTheme.typography.bodyLarge)
-        Text(text = entry.number, style = MaterialTheme.typography.bodyMedium)
+        val subtitle = if (entry.type == ContactType.BLUETOOTH) {
+            "Bluetooth • ${entry.number}"
+        } else {
+            entry.number
+        }
+        Text(text = subtitle, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
