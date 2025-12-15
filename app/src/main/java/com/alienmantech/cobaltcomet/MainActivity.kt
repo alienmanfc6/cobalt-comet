@@ -248,16 +248,23 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun hasBluetoothPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
+        val hasConnectPermission = ContextCompat.checkSelfPermission(
             this@MainActivity,
             Manifest.permission.BLUETOOTH_CONNECT
         ) == PackageManager.PERMISSION_GRANTED
+
+        val hasScanPermission = ContextCompat.checkSelfPermission(
+            this@MainActivity,
+            Manifest.permission.BLUETOOTH_SCAN
+        ) == PackageManager.PERMISSION_GRANTED
+
+        return hasConnectPermission && hasScanPermission
     }
 
     private fun requestBluetoothPermission() {
         ActivityCompat.requestPermissions(
             this@MainActivity,
-            arrayOf(Manifest.permission.BLUETOOTH_CONNECT),
+            arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN),
             REQUEST_BLUETOOTH_PERMISSION
         )
     }
