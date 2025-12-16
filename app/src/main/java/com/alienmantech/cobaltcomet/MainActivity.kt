@@ -144,6 +144,7 @@ class MainActivity : ComponentActivity() {
                             phoneEntries = phoneEntries,
                             onManageNumbers = { openContactSelection() },
                             onAddBluetoothContact = { openBluetoothWizard() },
+                            onRemoveContact = { entry -> removePhoneEntry(entry) },
                             bluetoothStatus = bluetoothStatus,
                             onBack = { navController.popBackStack() },
                         )
@@ -200,6 +201,16 @@ class MainActivity : ComponentActivity() {
 
     private fun savePhoneEntries(entries: List<PhoneEntry>) {
         Utils.savePhoneNumbers(this, entries)
+    }
+
+    private fun removePhoneEntry(entry: PhoneEntry) {
+        val updatedEntries = phoneEntries.filterNot { existing ->
+            existing.label == entry.label &&
+                existing.number == entry.number &&
+                existing.type == entry.type
+        }
+        phoneEntries = updatedEntries
+        savePhoneEntries(updatedEntries)
     }
 
     private fun openContactSelection() {
@@ -361,6 +372,7 @@ fun SetupScreen(
     phoneEntries: List<PhoneEntry>,
     onManageNumbers: () -> Unit,
     onAddBluetoothContact: () -> Unit,
+    onRemoveContact: (PhoneEntry) -> Unit,
     bluetoothStatus: BluetoothStatus,
     onBack: () -> Unit
 ) {
@@ -435,7 +447,10 @@ fun SetupScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             phoneEntries.forEachIndexed { index, entry ->
-                                Column(horizontalAlignment = Alignment.Start) {
+                                Column(
+                                    horizontalAlignment = Alignment.Start,
+                                    modifier = Modifier.clickable { onRemoveContact(entry) }
+                                ) {
                                     Text(
                                         text = entry.label,
                                         style = MaterialTheme.typography.bodyLarge,
@@ -449,6 +464,11 @@ fun SetupScreen(
                                         },
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "Tap to remove",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary
                                     )
                                 }
                                 if (index != phoneEntries.lastIndex) {
@@ -667,6 +687,7 @@ fun SetupScreenPreview() {
             ),
             onManageNumbers = {},
             onAddBluetoothContact = {},
+            onRemoveContact = {},
             bluetoothStatus = BluetoothStatus(
                 supported = true,
                 enabled = true,
