@@ -1,8 +1,13 @@
 package com.alienmantech.cobaltcomet
 
+import android.Manifest
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.content.Intent
-import android.os.Bundle
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -33,6 +38,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import com.alienmantech.cobaltcomet.models.ContactType
 import com.alienmantech.cobaltcomet.models.PhoneEntry
 import com.alienmantech.cobaltcomet.ui.theme.CobaltCometTheme
 import com.alienmantech.cobaltcomet.utils.CommunicationUtils
@@ -43,10 +50,10 @@ class ShareReceiverActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val phoneNumbers = Utils.loadPhoneNumbers(this)
+        val phoneNumbers = loadShareTargets()
 
         if (phoneNumbers.size == 1) {
-            handleIntent(phoneNumbers.first().number)
+            handleIntent(phoneNumbers.first())
             finish()
             return
         }
@@ -57,7 +64,7 @@ class ShareReceiverActivity : ComponentActivity() {
                     phoneNumbers = phoneNumbers,
                     showYelpError = shouldShowYelpErrorMessage,
                     onSelectNumber = { selectedNumber ->
-                        handleIntent(selectedNumber.number)
+                        handleIntent(selectedNumber)
                         finish()
                     },
                     onDismiss = { finish() }
@@ -66,22 +73,22 @@ class ShareReceiverActivity : ComponentActivity() {
         }
     }
 
-    private fun handleIntent(to: String) {
+    private fun handleIntent(entry: PhoneEntry) {
         if (intent.action.equals(Intent.ACTION_SEND)) {
             if (intent.type.equals("text/plain")) {
                 val title = intent.getStringExtra(Intent.EXTRA_TITLE)
                 val clipText = intent.getStringExtra(Intent.EXTRA_TEXT)
                 // send encoded data and map link together
-                sendMessage(to, CommunicationUtils.encodeUrlMessage(title, clipText))
+                sendMessage(entry, CommunicationUtils.encodeUrlMessage(title, clipText))
             }
         } else if (intent.action.equals(Intent.ACTION_VIEW)) {
             intent.data?.let { data ->
                 if (data.scheme.equals("geo")) {
                     val (lat, lng, locationName) = parseGeoData(data)
                     if (lat.isNotEmpty() && lng.isNotEmpty()) {
-                        sendMessage(to, CommunicationUtils.encodeGeoMessage(lat, lng, locationName))
+                        sendMessage(entry, CommunicationUtils.encodeGeoMessage(lat, lng, locationName))
                     } else if (locationName.isNotEmpty()) {
-                        sendMessage(to, CommunicationUtils.encodeGeoMessage("", "", locationName))
+                        sendMessage(entry, CommunicationUtils.encodeGeoMessage("", "", locationName))
                     }
                 }
             }
@@ -118,8 +125,8 @@ class ShareReceiverActivity : ComponentActivity() {
         }
     }
 
-    private fun sendMessage(to: String, message: String) {
-        CommunicationUtils.sendMessage(this, to, message)
+    private fun sendMessage(entry: PhoneEntry, message: String) {
+        CommunicationUtils.sendMessage(this, entry, message)
     }
 
     private val shouldShowYelpErrorMessage: Boolean
@@ -142,6 +149,55 @@ class ShareReceiverActivity : ComponentActivity() {
 
     private fun showErrorMessage(message: String) {
         //TODO: show error message
+    }
+
+    private fun loadShareTargets(): List<PhoneEntry> {
+        val savedEntries = Utils.loadPhoneNumbers(this).toMutableList()
+        val existingNumbers = savedEntries.map { it.number }.toMutableSet()
+
+        val adapter = BluetoothAdapter.getDefaultAdapter()
+        val hasBluetoothPermission = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.BLUETOOTH_CONNECT
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (adapter != null && hasBluetoothPermission) {
+            val connectedAddresses = getConnectedBluetoothAddresses()
+
+            adapter.bondedDevices.forEach { device ->
+                val address = device.address ?: return@forEach
+                if (connectedAddresses.contains(address) && !existingNumbers.contains(address)) {
+                    val label = device.name?.takeIf { it.isNotBlank() } ?: "Bluetooth device"
+                    savedEntries.add(
+                        PhoneEntry(
+                            label = label,
+                            number = address,
+                            type = ContactType.BLUETOOTH
+                        )
+                    )
+                    existingNumbers.add(address)
+                }
+            }
+        }
+
+        return savedEntries
+    }
+
+    private fun getConnectedBluetoothAddresses(): Set<String> {
+        val bluetoothManager = getSystemService(BluetoothManager::class.java) ?: return emptySet()
+        val connected = mutableSetOf<String>()
+        listOf(
+            BluetoothProfile.GATT,
+            BluetoothProfile.A2DP,
+            BluetoothProfile.HEADSET,
+            BluetoothProfile.HEARING_AID
+        ).forEach { profile ->
+            runCatching { bluetoothManager.getConnectedDevices(profile) }.getOrDefault(emptyList())
+                .forEach { device ->
+                    device.address?.let { connected.add(it) }
+                }
+        }
+        return connected
     }
 }
 
@@ -193,7 +249,7 @@ private fun ShareReceiverSheetContent(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Select a phone number",
+            text = "Select a contact",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold
         )
@@ -208,7 +264,7 @@ private fun ShareReceiverSheetContent(
 
         if (phoneNumbers.isEmpty()) {
             Text(
-                text = "No saved phone numbers.",
+                text = "No saved contacts.",
                 style = MaterialTheme.typography.bodyMedium
             )
         } else {
@@ -242,7 +298,12 @@ private fun PhoneNumberRow(
             .padding(vertical = 12.dp, horizontal = 8.dp)
     ) {
         Text(text = entry.label, style = MaterialTheme.typography.bodyLarge)
-        Text(text = entry.number, style = MaterialTheme.typography.bodyMedium)
+        val subtitle = if (entry.type == ContactType.BLUETOOTH) {
+            "Bluetooth • ${entry.number}"
+        } else {
+            entry.number
+        }
+        Text(text = subtitle, style = MaterialTheme.typography.bodyMedium)
     }
 }
 

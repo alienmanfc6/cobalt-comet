@@ -1,0 +1,661 @@
+package com.alienmantech.cobaltcomet
+
+import android.Manifest
+import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.alienmantech.cobaltcomet.models.ContactType
+import com.alienmantech.cobaltcomet.models.PhoneEntry
+import com.alienmantech.cobaltcomet.ui.theme.CobaltCometTheme
+import com.alienmantech.cobaltcomet.utils.Utils
+import kotlinx.coroutines.launch
+
+class BluetoothWizardActivity : ComponentActivity() {
+    companion object {
+        const val EXTRA_PAIRED_ENTRY = "paired_entry"
+    }
+
+    private val discoveredDevices = mutableStateListOf<BluetoothDeviceInfo>()
+    private var selectedDevice by mutableStateOf<BluetoothDeviceInfo?>(null)
+    private val snackbarHostState = SnackbarHostState()
+    private var pendingPermissionAction: (() -> Unit)? = null
+    private var pendingEnableAction: (() -> Unit)? = null
+
+    private val bluetoothPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            val allGranted = permissions.values.all { it }
+            if (allGranted) {
+                pendingPermissionAction?.invoke()
+            } else {
+                showError("Bluetooth permissions are required to continue.")
+            }
+            pendingPermissionAction = null
+        }
+
+    private val enableBluetoothLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                pendingEnableAction?.invoke()
+            } else {
+                showError("Enable Bluetooth to continue the wizard.")
+            }
+            pendingEnableAction = null
+        }
+
+    private val discoveryReceiver = object : BroadcastReceiver() {
+        @SuppressLint("MissingPermission")
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                BluetoothDevice.ACTION_FOUND -> {
+                    val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                    device?.let { addOrUpdateDevice(it) }
+                }
+
+                BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
+                    val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                    device?.let { addOrUpdateDevice(it) }
+                }
+            }
+        }
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
+        refreshBondedDevices()
+
+        val filter = IntentFilter().apply {
+            addAction(BluetoothDevice.ACTION_FOUND)
+            addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+        }
+        registerReceiver(discoveryReceiver, filter)
+
+        setContent {
+            CobaltCometTheme {
+                Scaffold(
+                    topBar = {
+                        TopAppBar(
+                            title = { Text(text = "Bluetooth wizard") },
+                            navigationIcon = {
+                                IconButton(onClick = { finish() }) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Back"
+                                    )
+                                }
+                            }
+                        )
+                    },
+                    snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+                ) { innerPadding ->
+                    WizardContent(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding),
+                        devices = discoveredDevices,
+                        snackbarHostState = snackbarHostState,
+                        selectedDevice = selectedDevice,
+                        onStartDiscovery = { startDiscovery() },
+                        onPrepareAndScan = { requestDiscoverableAndScan() },
+                        onSelectDevice = { device -> selectedDevice = device },
+                        onStartPairing = { device -> startPairing(device) },
+                        onSaveContact = { label -> saveSelection(label) }
+                    )
+                }
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        stopDiscovery()
+        unregisterReceiver(discoveryReceiver)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startDiscovery() {
+        ensureBluetoothReady { adapter ->
+            adapter.cancelDiscovery()
+            val started = adapter.startDiscovery()
+            if (!started) {
+                showError("Unable to start Bluetooth discovery. Try again.")
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun stopDiscovery() {
+        BluetoothAdapter.getDefaultAdapter()?.cancelDiscovery()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun refreshBondedDevices() {
+        ensureBluetoothReady { adapter ->
+            val bonded = adapter.bondedDevices
+                .map { device ->
+                    BluetoothDeviceInfo(
+                        name = device.name.orEmpty(),
+                        address = device.address,
+                        isBonded = true
+                    )
+                }
+            discoveredDevices.clear()
+            discoveredDevices.addAll(bonded)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun addOrUpdateDevice(device: BluetoothDevice) {
+        val existingIndex = discoveredDevices.indexOfFirst { it.address == device.address }
+        val info = BluetoothDeviceInfo(
+            name = device.name.orEmpty(),
+            address = device.address,
+            isBonded = device.bondState == BluetoothDevice.BOND_BONDED
+        )
+
+        if (existingIndex == -1) {
+            discoveredDevices.add(info)
+        } else {
+            discoveredDevices[existingIndex] = info
+        }
+
+        if (selectedDevice?.address == info.address) {
+            selectedDevice = info
+        }
+    }
+
+    private fun saveSelection(label: String) {
+        val device = selectedDevice ?: return
+        val cleanedLabel = label.ifBlank { device.name.ifBlank { "Bluetooth contact" } }
+        val entry = PhoneEntry(
+            label = cleanedLabel,
+            number = device.address,
+            type = ContactType.BLUETOOTH
+        )
+
+        val current = Utils.loadPhoneNumbers(this).toMutableList()
+        current.removeAll { it.number == entry.number }
+        current.add(0, entry)
+        Utils.savePhoneNumbers(this, current)
+
+        val resultIntent = Intent().apply {
+            putExtra(EXTRA_PAIRED_ENTRY, Utils.encodePhoneEntries(listOf(entry)))
+        }
+        setResult(RESULT_OK, resultIntent)
+        finish()
+    }
+
+    private fun requestDiscoverableAndScan() {
+        ensureBluetoothReady(requireAdvertise = true) { adapter ->
+            val discoverableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+                putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
+            }
+
+            // Ask the user to place this device into pairing mode so that another device running the
+            // wizard can discover it, then immediately start scanning for the peer device.
+            startActivity(discoverableIntent)
+            adapter.cancelDiscovery()
+            val started = adapter.startDiscovery()
+            if (!started) {
+                showError("Unable to scan for Bluetooth devices. Try again.")
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startPairing(deviceInfo: BluetoothDeviceInfo) {
+        ensureBluetoothReady { adapter ->
+            val remoteDevice = adapter.getRemoteDevice(deviceInfo.address)
+
+            selectedDevice = deviceInfo
+
+            when (remoteDevice.bondState) {
+                BluetoothDevice.BOND_NONE -> {
+                    val started = remoteDevice.createBond()
+                    if (!started) {
+                        showError("Could not start pairing with ${deviceInfo.name.ifBlank { "device" }}.")
+                    }
+                }
+
+                BluetoothDevice.BOND_BONDING, BluetoothDevice.BOND_BONDED -> {
+                    // No action needed; the receiver will update the bonded state and UI.
+                }
+            }
+        }
+    }
+
+    private fun ensureBluetoothReady(
+        requireAdvertise: Boolean = false,
+        onReady: (BluetoothAdapter) -> Unit
+    ) {
+        val adapter = BluetoothAdapter.getDefaultAdapter()
+        if (adapter == null) {
+            showError("Bluetooth is not supported on this device.")
+            return
+        }
+
+        if (!hasBluetoothPermissions(requireAdvertise)) {
+            pendingPermissionAction = { ensureBluetoothReady(requireAdvertise, onReady) }
+            requestBluetoothPermissions(requireAdvertise)
+            return
+        }
+
+        if (!adapter.isEnabled) {
+            pendingEnableAction = { ensureBluetoothReady(requireAdvertise, onReady) }
+            promptEnableBluetooth()
+            return
+        }
+
+        onReady(adapter)
+    }
+
+    private fun hasBluetoothPermissions(requireAdvertise: Boolean = false): Boolean {
+        val hasConnectPermission = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.BLUETOOTH_CONNECT
+        ) == PackageManager.PERMISSION_GRANTED
+
+        val hasScanPermission = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.BLUETOOTH_SCAN
+        ) == PackageManager.PERMISSION_GRANTED
+
+        val hasAdvertisePermission = !requireAdvertise || ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.BLUETOOTH_ADVERTISE
+        ) == PackageManager.PERMISSION_GRANTED
+
+        return hasConnectPermission && hasScanPermission && hasAdvertisePermission
+    }
+
+    private fun requestBluetoothPermissions(requireAdvertise: Boolean) {
+        val permissions = buildList {
+            add(Manifest.permission.BLUETOOTH_CONNECT)
+            add(Manifest.permission.BLUETOOTH_SCAN)
+            if (requireAdvertise) {
+                add(Manifest.permission.BLUETOOTH_ADVERTISE)
+            }
+        }
+        bluetoothPermissionLauncher.launch(permissions.toTypedArray())
+    }
+
+    private fun promptEnableBluetooth() {
+        val enableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+        enableBluetoothLauncher.launch(enableIntent)
+    }
+
+    private fun showError(message: String) {
+        lifecycleScope.launch {
+            snackbarHostState.showSnackbar(message)
+        }
+    }
+}
+
+@Composable
+private fun WizardContent(
+    modifier: Modifier = Modifier,
+    devices: List<BluetoothDeviceInfo>,
+    snackbarHostState: SnackbarHostState,
+    selectedDevice: BluetoothDeviceInfo?,
+    onStartDiscovery: () -> Unit,
+    onPrepareAndScan: () -> Unit,
+    onSelectDevice: (BluetoothDeviceInfo) -> Unit,
+    onStartPairing: (BluetoothDeviceInfo) -> Unit,
+    onSaveContact: (String) -> Unit
+) {
+    var step by remember { mutableStateOf(WizardStep.Prepare) }
+    var label by remember { mutableStateOf(selectedDevice?.name.orEmpty()) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(selectedDevice) {
+        if (selectedDevice != null) {
+            label = selectedDevice.name
+            step = if (selectedDevice.isBonded) WizardStep.SaveContact else WizardStep.Pairing
+        }
+    }
+
+    Box(modifier = modifier.background(MaterialTheme.colorScheme.background)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            WizardHeader(step)
+
+            when (step) {
+                WizardStep.Prepare -> PrepareStep(
+                    onContinue = {
+                        onPrepareAndScan()
+                        step = WizardStep.Scan
+                    }
+                )
+                WizardStep.Scan -> DeviceSelectionStep(
+                    devices = devices,
+                    onStartDiscovery = onStartDiscovery,
+                    onSelectDevice = {
+                        onStartPairing(it)
+                        onSelectDevice(it)
+                    }
+                )
+
+                WizardStep.Pairing -> PairingStep(
+                    device = selectedDevice,
+                    onRefresh = onStartDiscovery
+                )
+
+                WizardStep.SaveContact -> SaveContactStep(
+                    label = label,
+                    onLabelChanged = { label = it },
+                    device = selectedDevice,
+                    onSave = {
+                        if (selectedDevice == null) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Select a device to continue")
+                            }
+                        } else {
+                            onSaveContact(label)
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WizardHeader(step: WizardStep) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = "Pair a Bluetooth device",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Text(
+            text = when (step) {
+                WizardStep.Prepare -> "Open this wizard on both devices to place them into pairing mode."
+                WizardStep.Scan -> "Both devices are discoverable. Choose the other device to pair with it."
+                WizardStep.Pairing -> "Confirm the pairing prompts on both devices."
+                WizardStep.SaveContact -> "Save the paired device as a contact for sharing."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun PrepareStep(onContinue: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Enable Bluetooth and pairing mode",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Start this wizard on both devices. We'll request discoverable mode so they can see each other automatically.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) {
+            Text("Continue")
+        }
+    }
+}
+
+@Composable
+private fun DeviceSelectionStep(
+    devices: List<BluetoothDeviceInfo>,
+    onStartDiscovery: () -> Unit,
+    onSelectDevice: (BluetoothDeviceInfo) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Available devices",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "Scan",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { onStartDiscovery() }
+            )
+        }
+
+        if (devices.isEmpty()) {
+            Text(
+                text = "No devices found yet. Tap Scan to search.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(devices) { device ->
+                    DeviceRow(device = device, onSelect = onSelectDevice)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PairingStep(device: BluetoothDeviceInfo?, onRefresh: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = "Waiting for pairing",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = device?.name?.ifBlank { "Other device" } ?: "Other device",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Keep both wizards open and accept the Bluetooth pairing prompts on each device so they can exchange messages without SMS.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Button(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) {
+            Text("Check pairing status")
+        }
+    }
+}
+
+@Composable
+private fun DeviceRow(device: BluetoothDeviceInfo, onSelect: (BluetoothDeviceInfo) -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelect(device) },
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = device.name.ifBlank { "Unnamed device" },
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = device.address,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (device.isBonded) {
+                Text(
+                    text = "Paired",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SaveContactStep(
+    label: String,
+    onLabelChanged: (String) -> Unit,
+    device: BluetoothDeviceInfo?,
+    onSave: () -> Unit
+) {
+    val isBonded = device?.isBonded == true
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = "Save device",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        if (device != null) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = device.name.ifBlank { "Unnamed device" },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = device.address,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        OutlinedTextField(
+            value = label,
+            onValueChange = onLabelChanged,
+            label = { Text("Contact label") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (!isBonded) {
+            Text(
+                text = "Finish pairing on both devices to enable messaging over Bluetooth.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Button(onClick = onSave, modifier = Modifier.fillMaxWidth(), enabled = device != null && isBonded) {
+            Text("Save and finish")
+        }
+    }
+}
+
+private data class BluetoothDeviceInfo(
+    val name: String,
+    val address: String,
+    val isBonded: Boolean
+)
+
+private enum class WizardStep {
+    Prepare,
+    Scan,
+    Pairing,
+    SaveContact
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun WizardPreview() {
+    val mockDevices = listOf(
+        BluetoothDeviceInfo(name = "Truck Radio", address = "00:11:22:33:44:55", isBonded = true),
+        BluetoothDeviceInfo(name = "Cab Tablet", address = "AA:BB:CC:DD:EE:FF", isBonded = false)
+    )
+    CobaltCometTheme {
+        WizardContent(
+            devices = mockDevices,
+            snackbarHostState = SnackbarHostState(),
+            selectedDevice = mockDevices.first(),
+            onStartDiscovery = {},
+            onPrepareAndScan = {},
+            onSelectDevice = {},
+            onStartPairing = {},
+            onSaveContact = {}
+        )
+    }
+}

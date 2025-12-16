@@ -10,6 +10,7 @@ import android.provider.ContactsContract
 import android.text.TextUtils
 import android.util.Patterns
 import androidx.core.content.ContextCompat
+import com.alienmantech.cobaltcomet.models.ContactType
 import com.alienmantech.cobaltcomet.models.MessageModel
 import com.alienmantech.cobaltcomet.models.PhoneEntry
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logError
@@ -75,7 +76,7 @@ class Utils {
 
             // Fallback for legacy CSV data.
             return csvToList(raw).map { number ->
-                PhoneEntry(label = number, number = number)
+                PhoneEntry(label = number, number = number, type = ContactType.PHONE)
             }
         }
 

@@ -2,6 +2,7 @@ package com.alienmantech.cobaltcomet
 
 import android.Manifest
 import android.app.AlertDialog
+import android.bluetooth.BluetoothAdapter
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -11,6 +12,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresPermission
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,13 +27,24 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,27 +52,36 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.alienmantech.cobaltcomet.models.ContactType
 import com.alienmantech.cobaltcomet.models.MessageModel
 import com.alienmantech.cobaltcomet.models.PhoneEntry
 import com.alienmantech.cobaltcomet.ui.NoContentView
 import com.alienmantech.cobaltcomet.ui.theme.CobaltCometTheme
 import com.alienmantech.cobaltcomet.utils.CommunicationUtils
 import com.alienmantech.cobaltcomet.utils.Utils
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+
+private const val MainRoute = "main"
+private const val SetupRoute = "setup"
 
 class MainActivity : ComponentActivity() {
     companion object {
         private const val REQUEST_SMS_PERMISSION = 1
         private const val REQUEST_DRAW_PERMISSION = 2
         private const val REQUEST_CONTACTS_PERMISSION = 3
+        private const val REQUEST_BLUETOOTH_PERMISSION = 4
     }
 
     private var phoneEntries by mutableStateOf(listOf<PhoneEntry>())
     private var messages by mutableStateOf(listOf<MessageModel>())
+    private var bluetoothStatus by mutableStateOf(BluetoothStatus())
+    private var shouldOpenBluetoothWizardAfterPermission by mutableStateOf(false)
 
     private val contactSelectionLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -72,26 +95,58 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    private val bluetoothWizardLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                result.data?.getStringExtra(BluetoothWizardActivity.EXTRA_PAIRED_ENTRY)
+                    ?.let { json ->
+                        val newEntry = Utils.decodePhoneEntries(json).firstOrNull()
+                        if (newEntry != null) {
+                            val merged = phoneEntries.toMutableList().apply {
+                                removeAll { it.number == newEntry.number }
+                                add(0, newEntry)
+                            }
+                            phoneEntries = merged
+                            savePhoneEntries(merged)
+                        }
+                    }
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ensureSmsPermissionOnStart()
         enableEdgeToEdge()
         setContent {
             CobaltCometTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Box(
-                        modifier = Modifier
-                            .padding(innerPadding)
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.background)
-                    ) {
-                        PhoneNumberScreen(
-                            phoneEntries = phoneEntries,
-                            onManageNumbers = { openContactSelection() },
+                val navController = rememberNavController()
+                NavHost(
+                    navController = navController,
+                    startDestination = MainRoute,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
+                    composable(MainRoute) {
+                        MessageHistoryScreen(
                             messages = messages,
                             onMessageClick = { message ->
-                                CommunicationUtils.handleMessageAction(this@MainActivity, message)
-                            }
+                                CommunicationUtils.handleMessageAction(
+                                    this@MainActivity,
+                                    message
+                                )
+                            },
+                            onSettingsClick = { navController.navigate(SetupRoute) }
+                        )
+                    }
+                    composable(SetupRoute) {
+                        SetupScreen(
+                            phoneEntries = phoneEntries,
+                            onManageNumbers = { openContactSelection() },
+                            onAddBluetoothContact = { openBluetoothWizard() },
+                            onRemoveContact = { entry -> removePhoneEntry(entry) },
+                            bluetoothStatus = bluetoothStatus,
+                            onBack = { navController.popBackStack() },
                         )
                     }
                 }
@@ -104,12 +159,34 @@ class MainActivity : ComponentActivity() {
 
         phoneEntries = Utils.loadPhoneNumbers(this)
         messages = Utils.loadMessages(this)
+
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            bluetoothStatus = fetchBluetoothStatus()
+        }
     }
 
     override fun onPause() {
         super.onPause()
 
         savePhoneEntries(phoneEntries)
+    }
+
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    private fun fetchBluetoothStatus(): BluetoothStatus {
+        val adapter = BluetoothAdapter.getDefaultAdapter()
+            ?: return BluetoothStatus(supported = false, enabled = false)
+
+        val paired = adapter.bondedDevices.firstOrNull()
+        return BluetoothStatus(
+            supported = true,
+            enabled = adapter.isEnabled,
+            pairedDeviceName = paired?.name,
+            pairedDeviceAddress = paired?.address
+        )
     }
 
     private fun ensureSmsPermissionOnStart() {
@@ -126,6 +203,16 @@ class MainActivity : ComponentActivity() {
         Utils.savePhoneNumbers(this, entries)
     }
 
+    private fun removePhoneEntry(entry: PhoneEntry) {
+        val updatedEntries = phoneEntries.filterNot { existing ->
+            existing.label == entry.label &&
+                existing.number == entry.number &&
+                existing.type == entry.type
+        }
+        phoneEntries = updatedEntries
+        savePhoneEntries(updatedEntries)
+    }
+
     private fun openContactSelection() {
         val intent = Intent(this, ContactSelectionActivity::class.java).apply {
             putExtra(
@@ -134,6 +221,43 @@ class MainActivity : ComponentActivity() {
             )
         }
         contactSelectionLauncher.launch(intent)
+    }
+
+    private fun openBluetoothWizard() {
+        if (!hasBluetoothPermission()) {
+            shouldOpenBluetoothWizardAfterPermission = true
+            requestBluetoothPermission()
+            return
+        }
+
+        startBluetoothWizard()
+    }
+
+    private fun hasBluetoothPermission(): Boolean {
+        val hasConnectPermission = ContextCompat.checkSelfPermission(
+            this@MainActivity,
+            Manifest.permission.BLUETOOTH_CONNECT
+        ) == PackageManager.PERMISSION_GRANTED
+
+        val hasScanPermission = ContextCompat.checkSelfPermission(
+            this@MainActivity,
+            Manifest.permission.BLUETOOTH_SCAN
+        ) == PackageManager.PERMISSION_GRANTED
+
+        return hasConnectPermission && hasScanPermission
+    }
+
+    private fun requestBluetoothPermission() {
+        ActivityCompat.requestPermissions(
+            this@MainActivity,
+            arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN),
+            REQUEST_BLUETOOTH_PERMISSION
+        )
+    }
+
+    private fun startBluetoothWizard() {
+        val intent = Intent(this, BluetoothWizardActivity::class.java)
+        bluetoothWizardLauncher.launch(intent)
     }
 
     private fun checkPermissions() {
@@ -229,141 +353,266 @@ class MainActivity : ComponentActivity() {
         if (requestCode == REQUEST_SMS_PERMISSION || requestCode == REQUEST_CONTACTS_PERMISSION) {
             // check permissions again, we may need to look for more
             checkPermissions()
+        } else if (requestCode == REQUEST_BLUETOOTH_PERMISSION) {
+            val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+            if (granted) {
+                bluetoothStatus = fetchBluetoothStatus()
+                if (shouldOpenBluetoothWizardAfterPermission) {
+                    startBluetoothWizard()
+                }
+            }
+            shouldOpenBluetoothWizardAfterPermission = false
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PhoneNumberScreen(
+fun SetupScreen(
     phoneEntries: List<PhoneEntry>,
     onManageNumbers: () -> Unit,
-    messages: List<MessageModel>,
-    onMessageClick: (MessageModel) -> Unit
+    onAddBluetoothContact: () -> Unit,
+    onRemoveContact: (PhoneEntry) -> Unit,
+    bluetoothStatus: BluetoothStatus,
+    onBack: () -> Unit
 ) {
-    val listState = rememberLazyListState()
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.Top
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-                    shape = MaterialTheme.shapes.medium
-                )
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text(
-                text = "Uplink",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = "Your dispatch co-pilot with a cosmic glow.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(text = "Setup") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                }
             )
         }
-
-        Spacer(modifier = Modifier.height(18.dp))
-
+    ) { innerPadding ->
         Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp, vertical = 24.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            Text(
-                text = "Driver phone numbers",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            Button(
-                onClick = onManageNumbers,
-                modifier = Modifier.fillMaxWidth()
+            BluetoothStatusCard(bluetoothStatus = bluetoothStatus)
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(text = "Select from contacts")
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            if (phoneEntries.isEmpty()) {
                 Text(
-                    text = "No driver numbers selected.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = "Driver contacts",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
-            } else {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    ),
+                Button(
+                    onClick = onManageNumbers,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Text(text = "Select from contacts")
+                }
+
+                Button(
+                    onClick = onAddBluetoothContact,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                ) {
+                    Text(text = "Pair Bluetooth device")
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (phoneEntries.isEmpty()) {
+                    Text(
+                        text = "No driver contacts selected.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        phoneEntries.forEachIndexed { index, entry ->
-                            Column(horizontalAlignment = Alignment.Start) {
-                                Text(
-                                    text = entry.label,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = entry.number,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            if (index != phoneEntries.lastIndex) {
-                                Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            phoneEntries.forEachIndexed { index, entry ->
+                                Column(
+                                    horizontalAlignment = Alignment.Start,
+                                    modifier = Modifier.clickable { onRemoveContact(entry) }
+                                ) {
+                                    Text(
+                                        text = entry.label,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = if (entry.type == ContactType.BLUETOOTH) {
+                                            "Bluetooth • ${entry.number}"
+                                        } else {
+                                            entry.number
+                                        },
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "Tap to remove",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                if (index != phoneEntries.lastIndex) {
+                                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+                                }
                             }
                         }
                     }
                 }
             }
         }
+    }
+}
 
-        Spacer(modifier = Modifier.height(24.dp))
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MessageHistoryScreen(
+    messages: List<MessageModel>,
+    onMessageClick: (MessageModel) -> Unit,
+    onSettingsClick: () -> Unit
+) {
+    val listState = rememberLazyListState()
 
-        Text(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            text = "Saved Messages",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center,
-        )
-
-        if (messages.isEmpty()) {
-            NoContentView(
-                title = "No saved messages",
-                description = "Messages you save will show up here for quick access.",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = true)
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(text = "Saved Messages") },
+                actions = {
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = "Setup"
+                        )
+                    }
+                }
             )
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = true),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                state = listState
-            ) {
-                items(messages) { message ->
-                    MessageCard(message = message, onMessageClick = onMessageClick)
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            if (messages.isEmpty()) {
+                NoContentView(
+                    title = "No saved messages",
+                    description = "Messages you save will show up here for quick access.",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = true)
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = true),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    state = listState
+                ) {
+                    items(messages) { message ->
+                        MessageCard(message = message, onMessageClick = onMessageClick)
+                    }
                 }
             }
         }
     }
 }
+
+@Composable
+fun BluetoothStatusCard(bluetoothStatus: BluetoothStatus) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Bluetooth",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Paired Bluetooth devices appear alongside your contacts.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            BluetoothStatusSummary(
+                bluetoothStatus = bluetoothStatus,
+                shouldHighlightIssues = true
+            )
+        }
+    }
+}
+
+@Composable
+fun BluetoothStatusSummary(
+    bluetoothStatus: BluetoothStatus,
+    shouldHighlightIssues: Boolean
+) {
+    val statusMessage: Pair<String, Boolean> = when {
+        !bluetoothStatus.supported -> "Bluetooth is not supported on this device." to true
+        !bluetoothStatus.enabled -> "Bluetooth is turned off." to shouldHighlightIssues
+        bluetoothStatus.pairedDeviceName == null -> "No paired Bluetooth devices detected." to shouldHighlightIssues
+        else -> "Ready to use ${bluetoothStatus.pairedDeviceName} (${bluetoothStatus.pairedDeviceAddress})" to false
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = "Bluetooth",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = statusMessage.first,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (statusMessage.second) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (bluetoothStatus.enabled && bluetoothStatus.pairedDeviceName != null) {
+            AssistChip(
+                onClick = {},
+                enabled = false,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                label = {
+                    Text("Paired: ${bluetoothStatus.pairedDeviceName} (${bluetoothStatus.pairedDeviceAddress})")
+                }
+            )
+        }
+    }
+}
+
+data class BluetoothStatus(
+    val supported: Boolean = true,
+    val enabled: Boolean = false,
+    val pairedDeviceName: String? = null,
+    val pairedDeviceAddress: String? = null
+)
 
 @Composable
 fun MessageCard(
@@ -429,7 +678,30 @@ fun MessageCard(
 
 @Preview(showBackground = true)
 @Composable
-fun PhoneNumberScreenPreview() {
+fun SetupScreenPreview() {
+    CobaltCometTheme {
+        SetupScreen(
+            phoneEntries = listOf(
+                PhoneEntry(label = "Driver One", number = "555-1234"),
+                PhoneEntry(label = "Driver Two", number = "555-5678")
+            ),
+            onManageNumbers = {},
+            onAddBluetoothContact = {},
+            onRemoveContact = {},
+            bluetoothStatus = BluetoothStatus(
+                supported = true,
+                enabled = true,
+                pairedDeviceName = "Truck Radio",
+                pairedDeviceAddress = "00:11:22:33:44:55"
+            ),
+            onBack = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun MessageHistoryScreenPreview() {
     CobaltCometTheme {
         val mockMessages = listOf(
             MessageModel(
@@ -443,14 +715,10 @@ fun PhoneNumberScreenPreview() {
                 url = "https://example.com"
             )
         )
-        PhoneNumberScreen(
-            phoneEntries = listOf(
-                PhoneEntry(label = "Driver One", number = "555-1234"),
-                PhoneEntry(label = "Driver Two", number = "555-5678")
-            ),
-            onManageNumbers = {},
+        MessageHistoryScreen(
             messages = mockMessages,
-            onMessageClick = {}
+            onMessageClick = {},
+            onSettingsClick = {}
         )
     }
 }

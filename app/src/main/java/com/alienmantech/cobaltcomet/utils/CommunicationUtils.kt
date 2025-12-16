@@ -1,24 +1,24 @@
 package com.alienmantech.cobaltcomet.utils
 
 import android.content.Context
-import android.telephony.SmsManager
 import android.text.TextUtils
 import android.widget.Toast
 import com.alienmantech.cobaltcomet.models.MessageModel
+import com.alienmantech.cobaltcomet.models.PhoneEntry
 import com.alienmantech.cobaltcomet.utils.Logger
 
 class CommunicationUtils {
     companion object {
         const val SMS_PREFIX = "CobaltComet"
 
-        fun sendMessage(context: Context, to: String?, body: String): Boolean {
-            val recipient = to?.trim()
-            if (recipient.isNullOrEmpty()) {
-                Toast.makeText(context, "No phone number selected", Toast.LENGTH_SHORT).show()
+        fun sendMessage(context: Context, entry: PhoneEntry?, body: String): Boolean {
+            if (entry == null) {
+                Toast.makeText(context, "No recipient selected", Toast.LENGTH_SHORT).show()
                 return false
             }
 
-            return sendSms(context, recipient, body)
+            val dispatcher = TransportDispatcher()
+            return dispatcher.dispatch(context, entry, body)
         }
 
         // decide if this is a message we want to try to process
@@ -148,19 +148,5 @@ class CommunicationUtils {
             }
         }
 
-        @Synchronized
-        private fun sendSms(context: Context, to: String, body: String): Boolean {
-            return try {
-                // replace any returns with \n which is a carage return for text
-                val sm = SmsManager.getDefault()
-                //sm.sendTextMessage(to, null, body, null, null);
-                val parts = sm.divideMessage(body)
-                sm.sendMultipartTextMessage(to, null, parts, null, null)
-                true
-            } catch (e: Exception) {
-                Toast.makeText(context, "Message send failed", Toast.LENGTH_SHORT).show()
-                false
-            }
-        }
     }
 }
