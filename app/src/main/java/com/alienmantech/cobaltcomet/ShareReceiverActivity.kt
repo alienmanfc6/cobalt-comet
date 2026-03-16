@@ -96,33 +96,10 @@ class ShareReceiverActivity : ComponentActivity() {
     }
 
     private fun parseGeoData(data: Uri): Triple<String, String, String> {
-        val queryParameter = data.getQueryParameter("q")
-        if (!queryParameter.isNullOrBlank()) {
-            val decoded = Uri.decode(queryParameter)
-            val labelStart = decoded.indexOf("(")
-            val labelEnd = decoded.lastIndexOf(")")
-            val hasLabel = labelStart != -1 && labelEnd > labelStart
-
-            val coordinatePart = if (hasLabel) decoded.substring(0, labelStart) else decoded
-            val label = if (hasLabel) decoded.substring(labelStart + 1, labelEnd) else ""
-
-            val coords = coordinatePart.split(",")
-            if (coords.size >= 2 && coords[0].isNotBlank() && coords[1].isNotBlank()) {
-                return Triple(coords[0], coords[1], label)
-            }
-
-            if (coordinatePart.isNotBlank()) {
-                return Triple("", "", coordinatePart)
-            }
-        }
-
-        val schemeSpecificPart = data.schemeSpecificPart.substringBefore("?")
-        val values = schemeSpecificPart.split(",")
-        return if (values.size >= 2 && values[0].isNotBlank() && values[1].isNotBlank()) {
-            Triple(values[0], values[1], "")
-        } else {
-            Triple("", "", "")
-        }
+        return parseGeoParts(
+            schemeSpecificPart = data.schemeSpecificPart,
+            queryParameter = data.getQueryParameter("q")
+        )
     }
 
     private fun sendMessage(entry: PhoneEntry, message: String) {
@@ -198,6 +175,52 @@ class ShareReceiverActivity : ComponentActivity() {
                 }
         }
         return connected
+    }
+}
+
+internal fun parseGeoParts(
+    schemeSpecificPart: String,
+    queryParameter: String?
+): Triple<String, String, String> {
+    var lat = ""
+    var lng = ""
+    var locationName = ""
+
+    val coordinateSource = schemeSpecificPart.substringBefore("?")
+    parseLatLng(coordinateSource)?.let { (parsedLat, parsedLng) ->
+        lat = parsedLat
+        lng = parsedLng
+    }
+
+    if (!queryParameter.isNullOrBlank()) {
+        val decoded = Uri.decode(queryParameter)
+        val labelStart = decoded.indexOf("(")
+        val labelEnd = decoded.lastIndexOf(")")
+        val hasLabel = labelStart != -1 && labelEnd > labelStart
+
+        val coordinatePart = if (hasLabel) decoded.substring(0, labelStart) else decoded
+        val label = if (hasLabel) decoded.substring(labelStart + 1, labelEnd) else ""
+
+        parseLatLng(coordinatePart)?.let { (parsedLat, parsedLng) ->
+            lat = parsedLat
+            lng = parsedLng
+            locationName = label
+        } ?: run {
+            if (coordinatePart.isNotBlank()) {
+                locationName = coordinatePart
+            }
+        }
+    }
+
+    return Triple(lat, lng, locationName)
+}
+
+private fun parseLatLng(rawValue: String): Pair<String, String>? {
+    val values = rawValue.split(",")
+    return if (values.size >= 2 && values[0].isNotBlank() && values[1].isNotBlank()) {
+        values[0] to values[1]
+    } else {
+        null
     }
 }
 
