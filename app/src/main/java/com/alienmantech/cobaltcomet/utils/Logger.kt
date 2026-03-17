@@ -8,15 +8,35 @@ class Logger {
         private const val LOG_TAG = "CobaltComet"
 
         fun logInfo(message: String) {
-            Log.i(LOG_TAG, message)
+            safeLog { Log.i(LOG_TAG, message) }
         }
 
         fun logWarn(message: String) {
-            Log.w(LOG_TAG, message)
+            safeLog { Log.w(LOG_TAG, message) }
+        }
+
+        fun logWarn(message: String, e: Throwable) {
+            safeLog { Log.w(LOG_TAG, message, e) }
         }
 
         fun logError(message: String, e: Throwable) {
-            Log.e(LOG_TAG, message, e)
+            safeLog { Log.e(LOG_TAG, message, e) }
+        }
+
+        fun maskIdentifier(value: String?): String {
+            if (value.isNullOrBlank()) {
+                return "unknown"
+            }
+
+            val trimmed = value.trim()
+            return when {
+                trimmed.length <= 4 -> "****"
+                else -> "${"*".repeat(trimmed.length - 4)}${trimmed.takeLast(4)}"
+            }
+        }
+
+        private inline fun safeLog(block: () -> Unit) {
+            runCatching { block() }
         }
     }
 }

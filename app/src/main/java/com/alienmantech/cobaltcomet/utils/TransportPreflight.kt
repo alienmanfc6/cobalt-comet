@@ -1,47 +1,42 @@
 package com.alienmantech.cobaltcomet.utils
 
-import android.bluetooth.BluetoothAdapter
-import android.content.Context
-import android.widget.Toast
-
 object TransportPreflight {
-    fun validateBase(context: Context, to: String?, body: String): Boolean {
+
+    fun validateBase(to: String?, body: String): SendResult.Failure? {
         val recipient = to?.trim()
         if (recipient.isNullOrEmpty()) {
-            Toast.makeText(context, "No recipient selected", Toast.LENGTH_SHORT).show()
-            return false
+            return SendResult.Failure(
+                reason = SendFailureReason.NO_RECIPIENT,
+                userMessage = "No recipient selected"
+            )
         }
 
         if (body.isBlank()) {
-            Toast.makeText(context, "Cannot send an empty message", Toast.LENGTH_SHORT).show()
-            return false
+            return SendResult.Failure(
+                reason = SendFailureReason.EMPTY_MESSAGE,
+                userMessage = "Cannot send an empty message"
+            )
         }
 
-        return true
+        return null
     }
 
-    fun validateBluetooth(context: Context, target: String): Boolean {
-        if (target.isBlank()) {
-            Toast.makeText(context, "No recipient selected", Toast.LENGTH_SHORT).show()
-            return false
+    fun normalizeSmsDestination(to: String?): String? {
+        return to?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?.let(Utils::normalizePhoneNumber)
+            ?.takeIf(String::isNotEmpty)
+    }
+
+    fun validateSmsDestination(to: String?): SendResult.Failure? {
+        val normalizedRecipient = normalizeSmsDestination(to)
+        if (normalizedRecipient.isNullOrEmpty() || !Utils.isValidPhoneNumber(normalizedRecipient)) {
+            return SendResult.Failure(
+                reason = SendFailureReason.INVALID_DESTINATION,
+                userMessage = "Recipient phone number is invalid"
+            )
         }
 
-        val adapter = BluetoothAdapter.getDefaultAdapter()
-        if (adapter == null || !adapter.isEnabled) {
-            Toast.makeText(context, "Bluetooth is unavailable", Toast.LENGTH_SHORT).show()
-            return false
-        }
-
-        if (!BluetoothAdapter.checkBluetoothAddress(target)) {
-            Toast.makeText(context, "Bluetooth address is invalid", Toast.LENGTH_SHORT).show()
-            return false
-        }
-
-        if (adapter.bondedDevices.none { it.address == target }) {
-            Toast.makeText(context, "No paired device matches the selected address", Toast.LENGTH_SHORT).show()
-            return false
-        }
-
-        return true
+        return null
     }
 }

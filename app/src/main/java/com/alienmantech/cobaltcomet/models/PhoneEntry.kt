@@ -21,21 +21,22 @@ data class PhoneEntry(
         private const val KEY_TYPE = "type"
 
         fun fromJson(json: JSONObject): PhoneEntry? {
-            val label = json.optString(KEY_LABEL, "")
-            val number = json.optString(KEY_NUMBER, "")
+            val label = json.optString(KEY_LABEL, "").trim()
+            val number = json.optString(KEY_NUMBER, "").trim()
             if (label.isEmpty() || number.isEmpty()) {
                 return null
             }
-            val type = json.optString(KEY_TYPE, ContactType.PHONE.name)
-                .let { stored ->
-                    ContactType.values().firstOrNull { it.name == stored }
-                } ?: ContactType.PHONE
+            val storedType = json.optString(KEY_TYPE, ContactType.PHONE.name)
+            if (storedType == "BLUETOOTH") {
+                return null
+            }
+
+            val type = ContactType.values().firstOrNull { it.name == storedType } ?: ContactType.PHONE
             return PhoneEntry(label, number, type)
         }
     }
 }
 
 enum class ContactType {
-    PHONE,
-    BLUETOOTH
+    PHONE
 }

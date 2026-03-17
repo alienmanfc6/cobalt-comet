@@ -3,23 +3,30 @@ package com.alienmantech.cobaltcomet.utils
 import android.content.Context
 import android.telephony.SmsManager
 import android.text.TextUtils
-import android.widget.Toast
+import com.alienmantech.cobaltcomet.utils.Logger.Companion.logError
 
-class SmsCommunicationTransport : CommunicationTransport {
-    override fun canHandle(target: String): Boolean {
+class SmsCommunicationTransport {
+    fun canHandle(target: String): Boolean {
         return !TextUtils.isEmpty(target)
     }
 
     @Synchronized
-    override fun send(context: Context, to: String, message: String): Boolean {
+    fun send(context: Context, to: String, message: String): SendResult {
         return try {
-            val smsManager = SmsManager.getDefault()
+            val smsManager = context.getSystemService(SmsManager::class.java)
+                ?: return SendResult.Failure(
+                    reason = SendFailureReason.SEND_FAILED,
+                    userMessage = "SMS is unavailable on this device."
+                )
             val parts = smsManager.divideMessage(message)
             smsManager.sendMultipartTextMessage(to, null, parts, null, null)
-            true
+            SendResult.Success
         } catch (e: Exception) {
-            Toast.makeText(context, "Message send failed", Toast.LENGTH_SHORT).show()
-            false
+            logError("SMS send failed", e)
+            SendResult.Failure(
+                reason = SendFailureReason.SEND_FAILED,
+                userMessage = "SMS send failed. Please try again."
+            )
         }
     }
 }

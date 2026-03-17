@@ -10,7 +10,6 @@ import android.provider.ContactsContract
 import android.text.TextUtils
 import android.util.Patterns
 import androidx.core.content.ContextCompat
-import com.alienmantech.cobaltcomet.models.ContactType
 import com.alienmantech.cobaltcomet.models.MessageModel
 import com.alienmantech.cobaltcomet.models.PhoneEntry
 import com.alienmantech.cobaltcomet.utils.Logger.Companion.logError
@@ -20,10 +19,14 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
+import java.net.HttpURLConnection
 import java.net.URI
+import java.net.URL
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 
 class Utils {
@@ -33,20 +36,25 @@ class Utils {
         private const val PREF_PHONE_NUMBER = "phone"
         private const val PREF_MESSAGES = "messages"
         private const val MAX_SAVED_MESSAGES = 30
+        private const val MAPS_RESOLUTION_CONNECT_TIMEOUT_MS = 3000
+        private const val MAPS_RESOLUTION_READ_TIMEOUT_MS = 3000
+        private const val MAPS_RESOLUTION_MAX_REDIRECTS = 4
 
         private const val PHONE_NUMBER_DELIM = "-"
 
         fun getSavePref(context: Context): SharedPreferences {
-            return context.getSharedPreferences(PREF_FILE_NAME, Context.MODE_PRIVATE);
+            return context.getSharedPreferences(PREF_FILE_NAME, Context.MODE_PRIVATE)
         }
 
         fun loadPhoneNumbers(context: Context): List<PhoneEntry> {
-            return decodePhoneEntries(getSavePref(context).getString(PREF_PHONE_NUMBER, null))
+            return sanitizePhoneEntries(
+                decodePhoneEntries(getSavePref(context).getString(PREF_PHONE_NUMBER, null))
+            )
         }
 
         fun savePhoneNumbers(context: Context, phoneNumber: List<PhoneEntry>) {
             getSavePref(context).edit()
-                .putString(PREF_PHONE_NUMBER, encodePhoneEntries(phoneNumber))
+                .putString(PREF_PHONE_NUMBER, encodePhoneEntries(sanitizePhoneEntries(phoneNumber)))
                 .apply()
         }
 
@@ -63,6 +71,12 @@ class Utils {
                 return emptyList()
             }
 
+            if (!raw.trim().startsWith("[")) {
+                return csvToList(raw).map { number ->
+                    PhoneEntry(label = number, number = number)
+                }
+            }
+
             try {
                 val parsed = mutableListOf<PhoneEntry>()
                 val array = JSONArray(raw)
@@ -74,12 +88,12 @@ class Utils {
                     return parsed
                 }
             } catch (e: Exception) {
-                logWarn("Unable to decode saved phone entries; falling back to legacy format")
+                logWarn("Unable to decode saved phone entries; falling back to legacy format", e)
             }
 
             // Fallback for legacy CSV data.
             return csvToList(raw).map { number ->
-                PhoneEntry(label = number, number = number, type = ContactType.PHONE)
+                PhoneEntry(label = number, number = number)
             }
         }
 
@@ -88,11 +102,7 @@ class Utils {
                 return null
             }
 
-            if (ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.READ_CONTACTS
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
+            if (!hasContactsPermission(context)) {
                 return null
             }
 
@@ -111,9 +121,25 @@ class Utils {
         }
 
         fun loadMessages(context: Context): List<MessageModel> {
-            val saved = getSavePref(context).getString(PREF_MESSAGES, null) ?: return emptyList()
+            return decodeSavedMessages(getSavePref(context).getString(PREF_MESSAGES, null))
+        }
+
+        fun saveMessage(context: Context, message: MessageModel) {
+            val existing = loadMessages(context).toMutableList()
+            existing.add(0, message)
+
+            getSavePref(context).edit()
+                .putString(PREF_MESSAGES, encodeSavedMessages(limitSavedMessages(existing)))
+                .apply()
+        }
+
+        internal fun decodeSavedMessages(raw: String?): List<MessageModel> {
+            if (raw.isNullOrBlank()) {
+                return emptyList()
+            }
+
             return try {
-                val array = JSONArray(saved)
+                val array = JSONArray(raw)
                 val messages = mutableListOf<MessageModel>()
                 for (i in 0 until array.length()) {
                     val jsonObject = array.optJSONObject(i) ?: continue
@@ -128,20 +154,16 @@ class Utils {
             }
         }
 
-        fun saveMessage(context: Context, message: MessageModel) {
-            val existing = loadMessages(context).toMutableList()
-            existing.add(0, message)
-
-            val limited = existing.take(MAX_SAVED_MESSAGES)
-
+        internal fun encodeSavedMessages(messages: List<MessageModel>): String {
             val array = JSONArray()
-            for (item in limited) {
+            for (item in messages) {
                 array.put(item.toJson())
             }
+            return array.toString()
+        }
 
-            getSavePref(context).edit()
-                .putString(PREF_MESSAGES, array.toString())
-                .apply()
+        internal fun limitSavedMessages(messages: List<MessageModel>): List<MessageModel> {
+            return messages.take(MAX_SAVED_MESSAGES)
         }
 
         fun parseUrl(text: String?): String? {
@@ -171,9 +193,7 @@ class Utils {
             val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
             mapIntent.setPackage(GOOGLE_MAPS_PACKAGE)
             mapIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            mapIntent.resolveActivity(context.packageManager)?.let {
-                context.startActivity(mapIntent)
-            }
+            safeStartActivity(context, mapIntent)
         }
 
         fun launchGoogleMapsNavigation(context: Context, lat: String, lng: String): Boolean {
@@ -187,8 +207,7 @@ class Utils {
             mapIntent.setPackage(GOOGLE_MAPS_PACKAGE)
             mapIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
 
-            return if (mapIntent.resolveActivity(context.packageManager) != null) {
-                context.startActivity(mapIntent)
+            return if (safeStartActivity(context, mapIntent)) {
                 true
             } else {
                 val fallbackUrl = "https://www.google.com/maps/dir/?api=1&destination=$encodedDestination"
@@ -210,15 +229,13 @@ class Utils {
                     }
                 }
 
-                if (mapIntent.resolveActivity(context.packageManager) != null) {
-                    context.startActivity(mapIntent)
+                if (safeStartActivity(context, mapIntent)) {
                     true
                 } else if (!prefersUnpackagedIntent) {
                     val fallbackIntent = Intent(Intent.ACTION_VIEW, uri).apply {
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK
                     }
-                    if (fallbackIntent.resolveActivity(context.packageManager) != null) {
-                        context.startActivity(fallbackIntent)
+                    if (safeStartActivity(context, fallbackIntent)) {
                         true
                     } else {
                         false
@@ -248,6 +265,46 @@ class Utils {
 
             launchWebBrowser(context, url)
             return true
+        }
+
+        suspend fun resolveGoogleMapsNavigationDestination(url: String): String? {
+            return withContext(Dispatchers.IO) {
+                val initialUri = runCatching { URI(url) }.getOrNull() ?: return@withContext null
+                val initialScheme = initialUri.scheme?.lowercase(Locale.US)
+                if (initialScheme != "http" && initialScheme != "https") {
+                    return@withContext null
+                }
+
+                var currentUrl = url
+                repeat(MAPS_RESOLUTION_MAX_REDIRECTS) {
+                    val connection = (URL(currentUrl).openConnection() as? HttpURLConnection) ?: return@withContext null
+                    try {
+                        connection.instanceFollowRedirects = false
+                        connection.connectTimeout = MAPS_RESOLUTION_CONNECT_TIMEOUT_MS
+                        connection.readTimeout = MAPS_RESOLUTION_READ_TIMEOUT_MS
+                        connection.requestMethod = "GET"
+                        connection.connect()
+
+                        val redirectLocation = connection.getHeaderField("Location")
+                        if (connection.responseCode in 300..399 && !redirectLocation.isNullOrBlank()) {
+                            currentUrl = URL(URL(currentUrl), redirectLocation).toString()
+                            return@repeat
+                        }
+
+                        val resolvedUrl = connection.url?.toString().orEmpty().ifBlank { currentUrl }
+                        extractGoogleMapsCoordinates(resolvedUrl)?.let { return@withContext it }
+                        extractGoogleMapsNavigationQuery(resolvedUrl)?.let { return@withContext it }
+                        return@withContext null
+                    } catch (e: Exception) {
+                        logWarn("Unable to resolve Google Maps short url: $currentUrl", e)
+                        return@withContext null
+                    } finally {
+                        connection.disconnect()
+                    }
+                }
+
+                extractGoogleMapsCoordinates(currentUrl) ?: extractGoogleMapsNavigationQuery(currentUrl)
+            }
         }
 
         fun isGoogleMapsUrl(url: String): Boolean {
@@ -389,6 +446,22 @@ class Utils {
             return URLDecoder.decode(value, StandardCharsets.UTF_8)
         }
 
+        internal fun parseGoogleNavigationUri(data: Uri): String? {
+            return parseGoogleNavigationString(data.toString())
+        }
+
+        internal fun parseGoogleNavigationString(raw: String): String? {
+            val inlineQuery = raw.substringAfter("q=", missingDelimiterValue = "")
+                .substringBefore("&")
+                .takeIf(String::isNotBlank)
+            val schemeSpecificDestination = raw.substringAfter("google.navigation:", missingDelimiterValue = "")
+                .substringBefore("?")
+                .takeIf(String::isNotBlank)
+
+            val destination = inlineQuery ?: schemeSpecificDestination ?: return null
+            return decodeUrlComponent(destination).trim().ifEmpty { null }
+        }
+
         fun launchWebBrowser(context: Context, url: String) {
             try {
                 if (!TextUtils.isEmpty(url)) {
@@ -401,7 +474,7 @@ class Utils {
                     }
 
                     intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    context.startActivity(intent)
+                    safeStartActivity(context, intent)
                 } else {
                     logWarn("Url is empty")
                 }
@@ -412,6 +485,43 @@ class Utils {
 
         fun isYelpShareLink(data: String): Boolean {
             return data.contains("://yelp")
+        }
+
+        internal fun parseGeoUri(data: Uri): Triple<String, String, String> {
+            return parseGeoString(data.toString())
+        }
+
+        internal fun parseGeoString(raw: String): Triple<String, String, String> {
+            val query = raw.substringAfter("?", "")
+            val queryParameter = query.split("&")
+                .firstOrNull { it.startsWith("q=") }
+                ?.substringAfter("=")
+            if (!queryParameter.isNullOrBlank()) {
+                val decoded = decodeUrlComponent(queryParameter)
+                val labelStart = decoded.indexOf("(")
+                val labelEnd = decoded.lastIndexOf(")")
+                val hasLabel = labelStart != -1 && labelEnd > labelStart
+
+                val coordinatePart = if (hasLabel) decoded.substring(0, labelStart) else decoded
+                val label = if (hasLabel) decoded.substring(labelStart + 1, labelEnd) else ""
+
+                val coords = coordinatePart.split(",")
+                if (coords.size >= 2 && coords[0].isNotBlank() && coords[1].isNotBlank()) {
+                    return Triple(coords[0], coords[1], label)
+                }
+
+                if (coordinatePart.isNotBlank()) {
+                    return Triple("", "", coordinatePart)
+                }
+            }
+
+            val schemeSpecificPart = raw.substringAfter("geo:", "").substringBefore("?")
+            val values = schemeSpecificPart.split(",")
+            return if (values.size >= 2 && values[0].isNotBlank() && values[1].isNotBlank()) {
+                Triple(values[0], values[1], "")
+            } else {
+                Triple("", "", "")
+            }
         }
 
         fun csvToList(string: String): List<String> {
@@ -440,7 +550,17 @@ class Utils {
                 return false
             }
 
-            return Patterns.PHONE.matcher(rawNumber).matches()
+            val androidPattern = Patterns.PHONE
+            if (androidPattern != null) {
+                return androidPattern.matcher(rawNumber).matches()
+            }
+
+            val digitsOnly = rawNumber.filter(Char::isDigit)
+            return digitsOnly.length >= 3 &&
+                rawNumber.all { character ->
+                    character.isDigit() || character == '+' || character == '-' ||
+                        character == ' ' || character == '(' || character == ')' || character == '.'
+                }
         }
 
         fun formatReceivedAt(timestamp: Long, nowMillis: Long = System.currentTimeMillis()): String? {
@@ -477,6 +597,54 @@ class Utils {
                 else -> "th"
             }
             return "$day$suffix"
+        }
+
+        fun hasSmsPermissions(context: Context): Boolean {
+            return ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.SEND_SMS
+            ) == PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.RECEIVE_SMS
+                ) == PackageManager.PERMISSION_GRANTED
+        }
+
+        fun hasContactsPermission(context: Context): Boolean {
+            return ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_CONTACTS
+            ) == PackageManager.PERMISSION_GRANTED
+        }
+
+        internal fun sanitizePhoneEntries(entries: List<PhoneEntry>): List<PhoneEntry> {
+            val seen = linkedSetOf<String>()
+            return entries.filter { entry ->
+                val normalizedNumber = normalizePhoneNumber(entry.number)
+                if (entry.label.isBlank() || normalizedNumber.isBlank()) {
+                    return@filter false
+                }
+
+                val key = "${entry.type.name}|${entry.label.trim()}|$normalizedNumber"
+                seen.add(key)
+            }.map { entry ->
+                entry.copy(number = normalizePhoneNumber(entry.number))
+            }
+        }
+
+        private fun safeStartActivity(context: Context, intent: Intent): Boolean {
+            return try {
+                if (intent.resolveActivity(context.packageManager) == null) {
+                    false
+                } else {
+                    context.startActivity(intent)
+                    true
+                }
+            } catch (e: Exception) {
+                val target = intent.data?.toString().orEmpty().ifBlank { intent.action.orEmpty() }
+                logError("Unable to launch activity for $target", e)
+                false
+            }
         }
     }
 }

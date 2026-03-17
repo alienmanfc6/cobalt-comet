@@ -29,15 +29,15 @@ data class MessageModel(
         textList = mutableListOf()
         jData.optJSONArray("text")?.let {
             for (i in 0 until it.length()) {
-                textList.add(it.optString(i))
+                it.optString(i).takeIf(String::isNotBlank)?.let(textList::add)
             }
         }
 
-        url = jData.optString("url")
-        lat = jData.optString("lat")
-        lng = jData.optString("lng")
-        locationName = jData.optString("locationName")
-        from = jData.optString("from")
+        url = jData.optString("url").trim()
+        lat = jData.optString("lat").trim()
+        lng = jData.optString("lng").trim()
+        locationName = jData.optString("locationName").trim()
+        from = jData.optString("from").trim()
         receivedAt = jData.optLong("receivedAt")
     }
 
@@ -74,6 +74,51 @@ data class MessageModel(
     }
 
     override fun toString(): String {
-        return toJson().toString()
+        val fields = mutableListOf<String>()
+
+        if (textList.isNotEmpty()) {
+            val textJson = textList.joinToString(
+                prefix = "[",
+                postfix = "]"
+            ) { "\"${it.escapeJson()}\"" }
+            fields.add("\"text\":$textJson")
+        }
+        if (url.isNotEmpty()) {
+            fields.add("\"url\":\"${url.escapeJson()}\"")
+        }
+        if (lat.isNotEmpty()) {
+            fields.add("\"lat\":\"${lat.escapeJson()}\"")
+        }
+        if (lng.isNotEmpty()) {
+            fields.add("\"lng\":\"${lng.escapeJson()}\"")
+        }
+        if (locationName.isNotEmpty()) {
+            fields.add("\"locationName\":\"${locationName.escapeJson()}\"")
+        }
+        if (from.isNotEmpty()) {
+            fields.add("\"from\":\"${from.escapeJson()}\"")
+        }
+        if (receivedAt > 0) {
+            fields.add("\"receivedAt\":$receivedAt")
+        }
+
+        return fields.joinToString(prefix = "{", postfix = "}")
+    }
+
+    private fun String.escapeJson(): String {
+        return buildString(length) {
+            this@escapeJson.forEach { char ->
+                when (char) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\b' -> append("\\b")
+                    '\u000C' -> append("\\f")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> append(char)
+                }
+            }
+        }
     }
 }

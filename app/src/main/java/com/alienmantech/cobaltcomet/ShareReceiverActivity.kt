@@ -1,19 +1,13 @@
 package com.alienmantech.cobaltcomet
 
-import android.Manifest
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothManager
-import android.bluetooth.BluetoothProfile
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,10 +21,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.runtime.Composable
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -38,11 +32,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
-import com.alienmantech.cobaltcomet.models.ContactType
 import com.alienmantech.cobaltcomet.models.PhoneEntry
 import com.alienmantech.cobaltcomet.ui.theme.CobaltCometTheme
 import com.alienmantech.cobaltcomet.utils.CommunicationUtils
+import com.alienmantech.cobaltcomet.utils.Logger.Companion.logWarn
 import com.alienmantech.cobaltcomet.utils.Utils
 
 class ShareReceiverActivity : ComponentActivity() {
@@ -50,7 +43,7 @@ class ShareReceiverActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val phoneNumbers = loadShareTargets()
+        val phoneNumbers = Utils.loadPhoneNumbers(this)
 
         if (phoneNumbers.size == 1) {
             handleIntent(phoneNumbers.first())
@@ -74,54 +67,41 @@ class ShareReceiverActivity : ComponentActivity() {
     }
 
     private fun handleIntent(entry: PhoneEntry) {
-        if (intent.action.equals(Intent.ACTION_SEND)) {
-            if (intent.type.equals("text/plain")) {
-                val title = intent.getStringExtra(Intent.EXTRA_TITLE)
-                val clipText = intent.getStringExtra(Intent.EXTRA_TEXT)
-                // send encoded data and map link together
-                sendMessage(entry, CommunicationUtils.encodeUrlMessage(title, clipText))
-            }
-        } else if (intent.action.equals(Intent.ACTION_VIEW)) {
-            intent.data?.let { data ->
-                if (data.scheme.equals("geo")) {
-                    val (lat, lng, locationName) = parseGeoData(data)
-                    if (lat.isNotEmpty() && lng.isNotEmpty()) {
-                        sendMessage(entry, CommunicationUtils.encodeGeoMessage(lat, lng, locationName))
-                    } else if (locationName.isNotEmpty()) {
-                        sendMessage(entry, CommunicationUtils.encodeGeoMessage("", "", locationName))
-                    }
-                }
-            }
+        when (intent.action) {
+            Intent.ACTION_SEND -> handleSendIntent(entry)
+            Intent.ACTION_VIEW -> handleViewIntent(entry)
+            else -> logWarn("Unsupported share action=${intent.action}")
         }
     }
 
-    private fun parseGeoData(data: Uri): Triple<String, String, String> {
-        val queryParameter = data.getQueryParameter("q")
-        if (!queryParameter.isNullOrBlank()) {
-            val decoded = Uri.decode(queryParameter)
-            val labelStart = decoded.indexOf("(")
-            val labelEnd = decoded.lastIndexOf(")")
-            val hasLabel = labelStart != -1 && labelEnd > labelStart
-
-            val coordinatePart = if (hasLabel) decoded.substring(0, labelStart) else decoded
-            val label = if (hasLabel) decoded.substring(labelStart + 1, labelEnd) else ""
-
-            val coords = coordinatePart.split(",")
-            if (coords.size >= 2 && coords[0].isNotBlank() && coords[1].isNotBlank()) {
-                return Triple(coords[0], coords[1], label)
-            }
-
-            if (coordinatePart.isNotBlank()) {
-                return Triple("", "", coordinatePart)
-            }
+    private fun handleSendIntent(entry: PhoneEntry) {
+        if (intent.type != "text/plain") {
+            logWarn("Unsupported shared mimeType=${intent.type}")
+            return
         }
 
-        val schemeSpecificPart = data.schemeSpecificPart.substringBefore("?")
-        val values = schemeSpecificPart.split(",")
-        return if (values.size >= 2 && values[0].isNotBlank() && values[1].isNotBlank()) {
-            Triple(values[0], values[1], "")
+        val title = intent.getStringExtra(Intent.EXTRA_TITLE)
+        val clipText = intent.getStringExtra(Intent.EXTRA_TEXT)
+        if (title.isNullOrBlank() && clipText.isNullOrBlank()) {
+            logWarn("Received empty ACTION_SEND payload")
+            return
+        }
+
+        sendMessage(entry, CommunicationUtils.encodeUrlMessage(title, clipText))
+    }
+
+    private fun handleViewIntent(entry: PhoneEntry) {
+        val data = intent.data
+        if (data == null) {
+            logWarn("Received ACTION_VIEW without data")
+            return
+        }
+
+        val encodedMessage = CommunicationUtils.encodeSharedViewIntent(data)
+        if (encodedMessage != null) {
+            sendMessage(entry, encodedMessage)
         } else {
-            Triple("", "", "")
+            logWarn("Unsupported or empty ACTION_VIEW uri=$data")
         }
     }
 
@@ -131,74 +111,15 @@ class ShareReceiverActivity : ComponentActivity() {
 
     private val shouldShowYelpErrorMessage: Boolean
         get() {
-            if (intent.action.equals(Intent.ACTION_SEND)) {
-                if (intent.type.equals("text/plain")) {
-                    intent.getStringExtra(Intent.EXTRA_TEXT)?.let { clipText ->
-                        if (Utils.isYelpShareLink(clipText)) {
-                            return true
-                        }
+            if (intent.action == Intent.ACTION_SEND && intent.type == "text/plain") {
+                intent.getStringExtra(Intent.EXTRA_TEXT)?.let { clipText ->
+                    if (Utils.isYelpShareLink(clipText)) {
+                        return true
                     }
                 }
             }
             return false
         }
-
-    private fun showYelpError() {
-        showErrorMessage(message = "Yelp: Please use View Map -> Menu -> Open In Google Map.")
-    }
-
-    private fun showErrorMessage(message: String) {
-        //TODO: show error message
-    }
-
-    private fun loadShareTargets(): List<PhoneEntry> {
-        val savedEntries = Utils.loadPhoneNumbers(this).toMutableList()
-        val existingNumbers = savedEntries.map { it.number }.toMutableSet()
-
-        val adapter = BluetoothAdapter.getDefaultAdapter()
-        val hasBluetoothPermission = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.BLUETOOTH_CONNECT
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (adapter != null && hasBluetoothPermission) {
-            val connectedAddresses = getConnectedBluetoothAddresses()
-
-            adapter.bondedDevices.forEach { device ->
-                val address = device.address ?: return@forEach
-                if (connectedAddresses.contains(address) && !existingNumbers.contains(address)) {
-                    val label = device.name?.takeIf { it.isNotBlank() } ?: "Bluetooth device"
-                    savedEntries.add(
-                        PhoneEntry(
-                            label = label,
-                            number = address,
-                            type = ContactType.BLUETOOTH
-                        )
-                    )
-                    existingNumbers.add(address)
-                }
-            }
-        }
-
-        return savedEntries
-    }
-
-    private fun getConnectedBluetoothAddresses(): Set<String> {
-        val bluetoothManager = getSystemService(BluetoothManager::class.java) ?: return emptySet()
-        val connected = mutableSetOf<String>()
-        listOf(
-            BluetoothProfile.GATT,
-            BluetoothProfile.A2DP,
-            BluetoothProfile.HEADSET,
-            BluetoothProfile.HEARING_AID
-        ).forEach { profile ->
-            runCatching { bluetoothManager.getConnectedDevices(profile) }.getOrDefault(emptyList())
-                .forEach { device ->
-                    device.address?.let { connected.add(it) }
-                }
-        }
-        return connected
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -298,12 +219,7 @@ private fun PhoneNumberRow(
             .padding(vertical = 12.dp, horizontal = 8.dp)
     ) {
         Text(text = entry.label, style = MaterialTheme.typography.bodyLarge)
-        val subtitle = if (entry.type == ContactType.BLUETOOTH) {
-            "Bluetooth • ${entry.number}"
-        } else {
-            entry.number
-        }
-        Text(text = subtitle, style = MaterialTheme.typography.bodyMedium)
+        Text(text = entry.number, style = MaterialTheme.typography.bodyMedium)
     }
 }
 

@@ -1,15 +1,26 @@
 package com.alienmantech.cobaltcomet.utils
 
 import android.content.Context
+import android.net.Uri
 import android.text.TextUtils
 import android.widget.Toast
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
 import com.alienmantech.cobaltcomet.models.MessageModel
 import com.alienmantech.cobaltcomet.models.PhoneEntry
-import com.alienmantech.cobaltcomet.utils.Logger
+import com.alienmantech.cobaltcomet.utils.Logger.Companion.logInfo
+import com.alienmantech.cobaltcomet.utils.Logger.Companion.logWarn
+import com.alienmantech.cobaltcomet.utils.Logger.Companion.maskIdentifier
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import org.json.JSONObject
+import org.json.JSONTokener
 
 class CommunicationUtils {
     companion object {
-        const val SMS_PREFIX = "CobaltComet"
+        private val backgroundActionScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
         fun sendMessage(context: Context, entry: PhoneEntry?, body: String): Boolean {
             if (entry == null) {
@@ -17,18 +28,41 @@ class CommunicationUtils {
                 return false
             }
 
-            val dispatcher = TransportDispatcher()
-            return dispatcher.dispatch(context, entry, body)
+            if (!Utils.hasSmsPermissions(context)) {
+                Toast.makeText(
+                    context,
+                    "SMS permission is required before sending messages.",
+                    Toast.LENGTH_SHORT
+                ).show()
+                return false
+            }
+
+            TransportPreflight.validateBase(entry.number, body)?.let { failure ->
+                Toast.makeText(context, failure.userMessage, Toast.LENGTH_SHORT).show()
+                return false
+            }
+
+            val normalizedRecipient = TransportPreflight.normalizeSmsDestination(entry.number)
+            TransportPreflight.validateSmsDestination(normalizedRecipient)?.let { failure ->
+                Toast.makeText(context, failure.userMessage, Toast.LENGTH_SHORT).show()
+                return false
+            }
+
+            val result = SmsCommunicationTransport().send(context, normalizedRecipient.orEmpty(), body)
+            if (result is SendResult.Failure) {
+                Toast.makeText(context, result.userMessage, Toast.LENGTH_SHORT).show()
+            }
+            return result.isSuccess
         }
 
         // decide if this is a message we want to try to process
         fun shouldInterceptMessage(message: String): Boolean {
-            return (message.startsWith(SMS_PREFIX))
+            return parseMessagePayload(message) != null
         }
 
         // handle any incoming message
         fun handleIncomingMessage(context: Context, from: String, text: String) {
-            Logger.logInfo("handleIncomingMessage: $text")
+            logInfo("incoming message intercepted from=${maskIdentifier(from)}")
 
             decodeMessage(context, text)?.let { message ->
                 message.from = from
@@ -42,6 +76,20 @@ class CommunicationUtils {
             var navigationLaunched = false
             val preferMapsUrl = shouldPreferGoogleMapsUrl(message)
             var handledByMapsUrl = false
+
+            if (preferMapsUrl && Utils.shouldLaunchMapsUrlWithoutPackage(message.url)) {
+                launchInContextScope(context) {
+                    val destination = Utils.resolveGoogleMapsNavigationDestination(message.url)
+                    if (!destination.isNullOrEmpty()) {
+                        Utils.launchGoogleMapsNavigation(context, destination)
+                    } else if (!Utils.tryLaunchGoogleMapsFromUrl(context, message.url) &&
+                        message.locationName.isNotEmpty()
+                    ) {
+                        Utils.launchGoogleMapsNavigation(context, message.locationName)
+                    }
+                }
+                return
+            }
 
             if (!preferMapsUrl) {
                 preferredNavigationDestination(message)?.let { destination ->
@@ -100,16 +148,7 @@ class CommunicationUtils {
 
             populateCoordinatesFromUrl(message)
 
-            return buildString {
-                append(SMS_PREFIX)
-                append(message.toString())
-
-                // include the url as plain text to keep the map link in the same SMS message
-                if (message.url.isNotEmpty()) {
-                    append("\n")
-                    append(message.url)
-                }
-            }
+            return message.toString()
         }
 
         fun encodeGeoMessage(lat: String, lng: String, locationName: String = ""): String {
@@ -117,7 +156,36 @@ class CommunicationUtils {
             message.lat = lat
             message.lng = lng
             message.locationName = locationName
-            return SMS_PREFIX + message.toString()
+            return message.toString()
+        }
+
+        internal fun encodeSharedViewIntent(uri: Uri): String? {
+            return encodeSharedViewIntent(uri.toString())
+        }
+
+        internal fun encodeSharedViewIntent(rawUri: String): String? {
+            val scheme = runCatching {
+                java.net.URI(rawUri).scheme?.lowercase()
+            }.getOrNull()
+
+            return when (scheme) {
+                "geo" -> {
+                    val (lat, lng, locationName) = Utils.parseGeoString(rawUri)
+                    when {
+                        lat.isNotEmpty() && lng.isNotEmpty() ->
+                            encodeGeoMessage(lat, lng, locationName)
+                        locationName.isNotEmpty() ->
+                            encodeGeoMessage("", "", locationName)
+                        else -> null
+                    }
+                }
+                "google.navigation" -> {
+                    val destination = Utils.parseGoogleNavigationString(rawUri) ?: return null
+                    encodeGeoMessage("", "", destination)
+                }
+                "http", "https" -> encodeUrlMessage(null, rawUri)
+                else -> null
+            }
         }
 
         fun decodeMessage(context: Context, text: String): MessageModel? {
@@ -126,27 +194,26 @@ class CommunicationUtils {
                 return null
             }
 
-            val content = if (text.startsWith(SMS_PREFIX)) {
-                text.replaceFirst(SMS_PREFIX, "")
-            } else {
-                text
+            return parseMessagePayload(text) ?: run {
+                logWarn("Unable to decode shared message from=${maskIdentifier(null)}")
+                Toast.makeText(context, "Couldn't read shared message", Toast.LENGTH_SHORT).show()
+                null
+            }
+        }
+
+        internal fun parseMessagePayload(text: String): MessageModel? {
+            if (text.isBlank()) {
+                return null
             }
 
-            val parts = content.split("\n", limit = 2)
-            val jsonPart = parts.getOrNull(0) ?: return null
-            val extraUrl = parts.getOrNull(1)
-
             return try {
-                val message = MessageModel()
-                message.fromJson(jsonPart)
-
-                if (message.url.isEmpty() && !extraUrl.isNullOrEmpty()) {
-                    message.url = extraUrl
+                val tokener = JSONTokener(text)
+                val json = tokener.nextValue() as? JSONObject ?: return null
+                if (tokener.nextClean() != 0.toChar()) {
+                    return null
                 }
-
-                message
-            } catch (e: Exception) {
-                Toast.makeText(context, "Couldn't read shared message", Toast.LENGTH_SHORT).show()
+                MessageModel().apply { fromJson(json) }
+            } catch (_: Exception) {
                 null
             }
         }
@@ -188,6 +255,11 @@ class CommunicationUtils {
                 !navigationLaunched &&
                 !handledByMapsUrl &&
                 message.locationName.isNotEmpty()
+        }
+
+        private fun launchInContextScope(context: Context, block: suspend () -> Unit) {
+            val scope = (context as? LifecycleOwner)?.lifecycleScope ?: backgroundActionScope
+            scope.launch { block() }
         }
 
     }

@@ -49,6 +49,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.material.icons.extended)
     testImplementation(libs.junit)
+    testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

@@ -33,7 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import com.alienmantech.cobaltcomet.models.ContactType
 import com.alienmantech.cobaltcomet.models.PhoneEntry
 import com.alienmantech.cobaltcomet.ui.NoContentView
 import com.alienmantech.cobaltcomet.ui.theme.CobaltCometTheme
@@ -112,8 +111,7 @@ class ContactSelectionActivity : ComponentActivity() {
                 contacts.add(
                     PhoneEntry(
                         label = name,
-                        number = cleanedNumber,
-                        type = ContactType.PHONE
+                        number = cleanedNumber
                     )
                 )
             }
