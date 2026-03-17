@@ -40,30 +40,31 @@ class CommunicationUtils {
 
         fun handleMessageAction(context: Context, message: MessageModel) {
             var navigationLaunched = false
-            if (message.lat.isNotEmpty() && message.lng.isNotEmpty()) {
-                val destination = if (message.locationName.isNotEmpty()) {
-                    "${message.lat},${message.lng}(${message.locationName})"
-                } else {
-                    "${message.lat},${message.lng}"
+            val preferMapsUrl = shouldPreferGoogleMapsUrl(message)
+            var handledByMapsUrl = false
+
+            if (!preferMapsUrl) {
+                preferredNavigationDestination(message)?.let { destination ->
+                    navigationLaunched = Utils.launchGoogleMapsNavigation(context, destination)
                 }
-                navigationLaunched =
-                    Utils.launchGoogleMapsNavigation(context, destination)
-            } else if (message.locationName.isNotEmpty()) {
-                navigationLaunched = Utils.launchGoogleMapsNavigation(context, message.locationName)
             }
 
             if (message.url.isNotEmpty()) {
-                val handledByMaps = if (!navigationLaunched) {
+                handledByMapsUrl = if (!navigationLaunched || preferMapsUrl) {
                     Utils.tryLaunchGoogleMapsFromUrl(context, message.url)
                 } else {
                     false
                 }
 
-                if (!handledByMaps) {
+                if (!handledByMapsUrl) {
                     if (!navigationLaunched || !Utils.isGoogleMapsUrl(message.url)) {
                         Utils.launchWebBrowser(context, message.url)
                     }
                 }
+            }
+
+            if (shouldFallbackToLocationName(message, navigationLaunched, handledByMapsUrl)) {
+                Utils.launchGoogleMapsNavigation(context, message.locationName)
             }
         }
 
@@ -96,6 +97,8 @@ class CommunicationUtils {
             if (title?.isNotEmpty() == true) {
                 message.locationName = title
             }
+
+            populateCoordinatesFromUrl(message)
 
             return buildString {
                 append(SMS_PREFIX)
@@ -146,6 +149,45 @@ class CommunicationUtils {
                 Toast.makeText(context, "Couldn't read shared message", Toast.LENGTH_SHORT).show()
                 null
             }
+        }
+
+        internal fun preferredNavigationDestination(message: MessageModel): String? {
+            return when {
+                message.lat.isNotEmpty() && message.lng.isNotEmpty() -> "${message.lat},${message.lng}"
+                message.locationName.isNotEmpty() -> message.locationName
+                else -> null
+            }
+        }
+
+        internal fun populateCoordinatesFromUrl(message: MessageModel) {
+            if (message.url.isEmpty()) {
+                return
+            }
+
+            Utils.extractGoogleMapsCoordinates(message.url)?.split(",")?.let { coordinates ->
+                if (coordinates.size >= 2) {
+                    message.lat = coordinates[0]
+                    message.lng = coordinates[1]
+                }
+            }
+        }
+
+        internal fun shouldPreferGoogleMapsUrl(message: MessageModel): Boolean {
+            return message.lat.isEmpty() &&
+                message.lng.isEmpty() &&
+                message.url.isNotEmpty() &&
+                Utils.isGoogleMapsUrl(message.url)
+        }
+
+        internal fun shouldFallbackToLocationName(
+            message: MessageModel,
+            navigationLaunched: Boolean,
+            handledByMapsUrl: Boolean
+        ): Boolean {
+            return shouldPreferGoogleMapsUrl(message) &&
+                !navigationLaunched &&
+                !handledByMapsUrl &&
+                message.locationName.isNotEmpty()
         }
 
     }

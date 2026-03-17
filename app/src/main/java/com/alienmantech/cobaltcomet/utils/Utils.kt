@@ -20,6 +20,9 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
+import java.net.URI
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 import java.util.Locale
 import org.json.JSONArray
 
@@ -198,13 +201,28 @@ class Utils {
 
         fun launchGoogleMapsUrl(context: Context, url: String): Boolean {
             return try {
-                val mapIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                mapIntent.setPackage(GOOGLE_MAPS_PACKAGE)
-                mapIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                val uri = Uri.parse(url)
+                val prefersUnpackagedIntent = shouldLaunchMapsUrlWithoutPackage(url)
+                val mapIntent = Intent(Intent.ACTION_VIEW, uri).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    if (!prefersUnpackagedIntent) {
+                        setPackage(GOOGLE_MAPS_PACKAGE)
+                    }
+                }
 
                 if (mapIntent.resolveActivity(context.packageManager) != null) {
                     context.startActivity(mapIntent)
                     true
+                } else if (!prefersUnpackagedIntent) {
+                    val fallbackIntent = Intent(Intent.ACTION_VIEW, uri).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    if (fallbackIntent.resolveActivity(context.packageManager) != null) {
+                        context.startActivity(fallbackIntent)
+                        true
+                    } else {
+                        false
+                    }
                 } else {
                     false
                 }
@@ -234,7 +252,7 @@ class Utils {
 
         fun isGoogleMapsUrl(url: String): Boolean {
             return try {
-                val uri = Uri.parse(url)
+                val uri = URI(url)
                 val host = uri.host?.lowercase(Locale.US) ?: return false
 
                 if (host == "maps.app.goo.gl") {
@@ -257,19 +275,52 @@ class Utils {
             }
         }
 
+        internal fun shouldLaunchMapsUrlWithoutPackage(url: String): Boolean {
+            return try {
+                val uri = URI(url)
+                val host = uri.host?.lowercase(Locale.US) ?: return false
+                host == "maps.app.goo.gl" || (host == "goo.gl" && uri.path?.startsWith("/maps") == true)
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+        fun extractGoogleMapsCoordinates(url: String): String? {
+            return try {
+                val uri = URI(url)
+
+                extractCoordinatesFromGoogleMapsUri(uri)?.let { return it }
+
+                getQueryParameter(uri, "link")?.let { nested ->
+                    val decoded = decodeUrlComponent(nested)
+                    if (decoded != url && isGoogleMapsUrl(decoded)) {
+                        extractGoogleMapsCoordinates(decoded)?.let { return it }
+                    }
+                }
+
+                null
+            } catch (e: Exception) {
+                logWarn("Unable to parse coordinates from url: $url")
+                null
+            }
+        }
+
         fun extractGoogleMapsNavigationQuery(url: String): String? {
             return try {
-                val uri = Uri.parse(url)
+                val uri = URI(url)
+
+                extractCoordinatesFromGoogleMapsUri(uri)?.let { return it }
 
                 val candidateParameters = listOf("q", "query", "destination", "daddr", "ll")
                 for (parameter in candidateParameters) {
-                    val value = uri.getQueryParameter(parameter)
+                    val value = getQueryParameter(uri, parameter)
                     if (!value.isNullOrBlank()) {
+                        extractLatLngFromText(value)?.let { return it }
                         return value
                     }
                 }
 
-                uri.encodedPath?.let { path ->
+                uri.rawPath?.let { path ->
                     extractLatLngFromText(path)?.let { return it }
                 }
 
@@ -277,8 +328,8 @@ class Utils {
                     extractLatLngFromText(fragment)?.let { return it }
                 }
 
-                uri.getQueryParameter("link")?.let { nested ->
-                    val decoded = Uri.decode(nested)
+                getQueryParameter(uri, "link")?.let { nested ->
+                    val decoded = decodeUrlComponent(nested)
                     if (decoded != url && isGoogleMapsUrl(decoded)) {
                         extractGoogleMapsNavigationQuery(decoded)?.let { return it }
                     }
@@ -291,6 +342,23 @@ class Utils {
             }
         }
 
+        private fun extractCoordinatesFromGoogleMapsUri(uri: URI): String? {
+            val coordinateParameters = listOf("ll", "q", "query", "destination", "daddr")
+            for (parameter in coordinateParameters) {
+                extractLatLngFromText(getQueryParameter(uri, parameter).orEmpty())?.let { return it }
+            }
+
+            uri.rawPath?.let { path ->
+                extractLatLngFromText(path)?.let { return it }
+            }
+
+            uri.fragment?.let { fragment ->
+                extractLatLngFromText(fragment)?.let { return it }
+            }
+
+            return null
+        }
+
         private fun extractLatLngFromText(text: String): String? {
             val match = COORDINATE_REGEX.find(text)
             return if (match != null && match.groupValues.size >= 3) {
@@ -298,6 +366,27 @@ class Utils {
             } else {
                 null
             }
+        }
+
+        private fun getQueryParameter(uri: URI, name: String): String? {
+            val query = uri.rawQuery ?: return null
+            return query.split("&").asSequence()
+                .mapNotNull { segment ->
+                    val index = segment.indexOf("=")
+                    val key = if (index >= 0) segment.substring(0, index) else segment
+                    if (decodeUrlComponent(key) != name) {
+                        null
+                    } else if (index >= 0) {
+                        decodeUrlComponent(segment.substring(index + 1))
+                    } else {
+                        ""
+                    }
+                }
+                .firstOrNull()
+        }
+
+        private fun decodeUrlComponent(value: String): String {
+            return URLDecoder.decode(value, StandardCharsets.UTF_8)
         }
 
         fun launchWebBrowser(context: Context, url: String) {
