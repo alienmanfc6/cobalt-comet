@@ -50,6 +50,36 @@ class CommunicationUtilsTest {
     }
 
     @Test
+    fun shouldPreferGoogleMapsUrl_whenMapsUrlAndCoordinatesExist() {
+        val message = MessageModel(
+            locationName = "Coffee Shop",
+            lat = "37.7749",
+            lng = "-122.4194",
+            url = "https://www.google.com/maps/search/?api=1&query=Coffee+Shop&ll=37.7749,-122.4194"
+        )
+
+        val shouldPreferUrl = CommunicationUtils.shouldPreferGoogleMapsUrl(message)
+
+        assertTrue(shouldPreferUrl)
+    }
+
+    @Test
+    fun shouldPreferGoogleMapsUrl_isFalseWithoutMapsUrl() {
+        val coordinatesOnlyMessage = MessageModel(
+            locationName = "Coffee Shop",
+            lat = "37.7749",
+            lng = "-122.4194"
+        )
+        val nonMapsUrlMessage = MessageModel(
+            locationName = "Coffee Shop",
+            url = "https://example.com/coffee"
+        )
+
+        assertFalse(CommunicationUtils.shouldPreferGoogleMapsUrl(coordinatesOnlyMessage))
+        assertFalse(CommunicationUtils.shouldPreferGoogleMapsUrl(nonMapsUrlMessage))
+    }
+
+    @Test
     fun encodeUrlMessage_returnsPureJsonPayload() {
         val encoded = CommunicationUtils.encodeUrlMessage(
             title = "Coffee Shop",
@@ -157,6 +187,22 @@ class CommunicationUtilsTest {
         )
 
         assertFalse(shouldFallback)
+    }
+
+    @Test
+    fun shouldFallbackToLocationName_isTrueWhenMapsUrlFailsAndLocationExists() {
+        val message = MessageModel(
+            locationName = "Lowe's Home Improvement",
+            url = "https://maps.app.goo.gl/oKZjmrkguyw8YLcy7"
+        )
+
+        val shouldFallback = CommunicationUtils.shouldFallbackToLocationName(
+            message = message,
+            navigationLaunched = false,
+            handledByMapsUrl = false
+        )
+
+        assertTrue(shouldFallback)
     }
 
     @Test

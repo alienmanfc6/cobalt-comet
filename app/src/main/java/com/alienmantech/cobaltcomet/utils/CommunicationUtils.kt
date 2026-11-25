@@ -74,7 +74,7 @@ class CommunicationUtils {
 
         fun handleMessageAction(context: Context, message: MessageModel) {
             var navigationLaunched = false
-            val preferMapsUrl = shouldPreferGoogleMapsUrl(message)
+            val preferMapsUrl = hasGoogleMapsUrl(message)
             var handledByMapsUrl = false
 
             if (preferMapsUrl && Utils.shouldLaunchMapsUrlWithoutPackage(message.url)) {
@@ -240,10 +240,7 @@ class CommunicationUtils {
         }
 
         internal fun shouldPreferGoogleMapsUrl(message: MessageModel): Boolean {
-            return message.lat.isEmpty() &&
-                message.lng.isEmpty() &&
-                message.url.isNotEmpty() &&
-                Utils.isGoogleMapsUrl(message.url)
+            return hasGoogleMapsUrl(message)
         }
 
         internal fun shouldFallbackToLocationName(
@@ -255,6 +252,10 @@ class CommunicationUtils {
                 !navigationLaunched &&
                 !handledByMapsUrl &&
                 message.locationName.isNotEmpty()
+        }
+
+        internal fun hasGoogleMapsUrl(message: MessageModel): Boolean {
+            return message.url.isNotEmpty() && Utils.isGoogleMapsUrl(message.url)
         }
 
         private fun launchInContextScope(context: Context, block: suspend () -> Unit) {

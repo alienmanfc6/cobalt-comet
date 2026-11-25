@@ -67,13 +67,14 @@ This file is for AI coding agents working in this repository. Use it as the repo
 
 ## Validation
 - Primary validation command:
-  - `./gradlew test`
-- Focused unit-test command when you only need the debug unit test target:
   - `./gradlew :app:testDebugUnitTest`
-- `./gradlew test` succeeds in the current repo state and is the default check to run after meaningful changes.
+- Full project validation command:
+  - `./gradlew test`
+- The GitHub Actions Android CI workflow explicitly runs `./gradlew :app:testDebugUnitTest` before the full build, so changes that affect shared utilities, parsing, persistence, or transport rules should assume this JVM suite must stay green.
+- After meaningful code changes, at minimum run `./gradlew :app:testDebugUnitTest`. Run `./gradlew test` when you need the broader Gradle test entrypoint.
 
 ## Test Expectations
-- Automated test coverage is currently minimal.
+- Automated JVM coverage now includes a small baseline suite around message payload parsing, geo/url helpers, saved-data compatibility, and transport preflight rules.
 - Add or update unit tests when touching:
   - message encoding or decoding
   - URL or geo parsing
