@@ -14,7 +14,7 @@ android {
         applicationId = "com.alienmantech.cobaltcomet"
         minSdk = 33
         targetSdk = 36
-        versionCode = 4
+        versionCode = 5
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
